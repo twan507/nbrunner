@@ -1,0 +1,29 @@
+# Build tools
+setuptools==69.5.1
+wheel==0.43.0
+
+# Notebook execution - Core functionality
+nbformat==5.10.0
+
+# Data handling - Thư viện cơ bản cho notebooks
+pandas==2.2.2
+numpy==1.26.4
+
+# File and directory management
+send2trash==1.8.3       # Send files to trash instead of permanent deletion
+
+# Excel support (nếu notebooks cần xử lý Excel)
+openpyxl==3.1.2         # Read/write Excel 2010 xlsx/xlsm files
+
+# CSV and data formats
+tabulate==0.9.0         # Pretty-print tabular data
+
+# Configuration files
+pyyaml==6.0.1           # YAML file support
+python-dotenv==1.0.1    # .env file support
+
+# Date and time utilities
+python-dateutil==2.9.0  # Enhanced date/time parsing
+
+# Packaging
+pyinstaller==6.7.0
