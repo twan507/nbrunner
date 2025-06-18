@@ -130,7 +130,10 @@ echo.
 REM Tat moi truong ao truoc khi thoat
 if defined VIRTUAL_ENV (
     echo Tat moi truong ao...
-    call deactivate
+    conda deactivate >nul 2>&1
+    if errorlevel 1 (
+        call deactivate >nul 2>&1
+    )
 )
 pause
 exit /b %errorlevel%

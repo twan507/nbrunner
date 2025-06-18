@@ -53,13 +53,32 @@ APP_BUILD_DIR = os.path.join(ROOT_DIR, "app")
 def get_pyinstaller_args():
     """
     Lấy các tham số PyInstaller cần thiết.
-    Đã loại bỏ nbconvert vì không cần dùng PythonExporter nữa.
+    Loại bỏ các warning và tối ưu hóa build process.
     """
     args = [
+        # Core notebook format support
         "--hidden-import",
         "nbformat",
         "--collect-all",
         "nbformat",
+        # XML parsing support (fix DLL load errors)
+        "--hidden-import",
+        "xml.parsers.expat",
+        "--hidden-import",
+        "xml.etree.ElementTree",
+        "--hidden-import",
+        "plistlib",
+        "--hidden-import",
+        "pkg_resources",
+        # Suppress specific warnings
+        "--exclude-module",
+        "charset_normalizer.md__mypyc",
+        # Optimize build size
+        "--strip",
+        "--noupx",
+        # Suppress console warnings
+        "--log-level",
+        "WARN",
     ]
 
     return args
