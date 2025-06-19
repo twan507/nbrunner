@@ -25,5 +25,9 @@ python-dotenv==1.0.1    # .env file support
 # Date and time utilities
 python-dateutil==2.9.0  # Enhanced date/time parsing
 
+# GUI development
+PyQt6==6.7.0 
+PyQt6-sip==13.6.0
+
 # Packaging
 pyinstaller==6.7.0

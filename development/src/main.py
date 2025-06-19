@@ -1,18 +1,36 @@
-import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox, simpledialog
-import threading
-import queue
 import sys
 import os
+import threading
+import queue
 import time
 import io
 import traceback
+from PyQt6.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QPushButton,
+    QTextEdit,
+    QScrollArea,
+    QLabel,
+    QFrame,
+    QGroupBox,
+    QMessageBox,
+    QSplitter,
+)
+from PyQt6.QtCore import QTimer, Qt, pyqtSignal
+from PyQt6.QtGui import QIcon, QFont, QCloseEvent, QMouseEvent
 
 # Import thư viện xử lý notebook
 try:
     import nbformat
 except ImportError:
-    messagebox.showerror("Lỗi Import", "Không thể import nbformat. Vui lòng cài đặt thư viện cần thiết.")
+    # Hiển thị lỗi bằng một cửa sổ đơn giản nếu PyQt chưa sẵn sàng
+    app = QApplication.instance()
+    if not app:
+        app = QApplication(sys.argv)
+    QMessageBox.critical(None, "Lỗi Import", "Không thể import nbformat. Vui lòng cài đặt thư viện cần thiết.")
     sys.exit(1)
 
 # Import config
@@ -20,26 +38,85 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__))))
 try:
     import config
 except ImportError:
-    messagebox.showerror("Lỗi Config", "Không thể import config.py. Vui lòng đảm bảo file config.py tồn tại.")
+    app = QApplication.instance()
+    if not app:
+        app = QApplication(sys.argv)
+    QMessageBox.critical(None, "Lỗi Config", "Không thể import config.py. Vui lòng đảm bảo file config.py tồn tại.")
     sys.exit(1)
 
 
-class NotebookRunner:
-    def __init__(self, root):
-        self.root = root
-        self.root.title(config.APP_NAME)
-        self.root.resizable(True, True)
+class ClickableLabel(QLabel):
+    doubleClicked = pyqtSignal()
 
-        # --- Cấu trúc dữ liệu cho Sections ---
-        self.sections = {}
-        self.next_section_id = 0
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-        # Các biến theo dõi card và lựa chọn
+    def mouseDoubleClickEvent(self, a0: QMouseEvent | None) -> None:
+        self.doubleClicked.emit()
+        super().mouseDoubleClickEvent(a0)
+
+
+class NotebookCard(QFrame):
+    """Widget tùy chỉnh cho mỗi card notebook."""
+
+    clicked = pyqtSignal(str)  # Signal to emit the path on click
+
+    def __init__(self, path, description, parent=None):
+        super().__init__(parent)
+        self.path = path
+        self.is_highlighted = False
+        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.setObjectName("Card")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(5)
+
+        self.filename_label = QLabel(os.path.basename(path))
+        self.filename_label.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self.filename_label.setObjectName("CardLabel")
+        self.filename_label.setWordWrap(True)
+
+        self.desc_label = QLabel(description)
+        self.desc_label.setFont(QFont("Segoe UI", 9))
+        self.desc_label.setObjectName("CardLabel")
+        self.desc_label.setWordWrap(True)
+        self.desc_label.setStyleSheet("color: #666666;")
+
+        layout.addWidget(self.filename_label)
+        layout.addWidget(self.desc_label)
+
+    def mousePressEvent(self, a0: QMouseEvent | None) -> None:
+        self.clicked.emit(self.path)
+        super().mousePressEvent(a0)
+
+    def set_highlighted(self, highlighted):
+        self.is_highlighted = highlighted
+        if highlighted:
+            self.setObjectName("SelectedCard")
+        else:
+            self.setObjectName("Card")
+        # Re-polish to apply new style
+        style = self.style()
+        if style:
+            style.unpolish(self)
+            style.polish(self)
+
+
+class NotebookRunner(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(config.APP_NAME)
+        self.setMinimumSize(800, 600)  # Giảm minimum size để linh hoạt hơn
+
+        # --- Cấu trúc dữ liệu ---
         self.available_notebook_cards = {}
         self.highlighted_available = set()
 
         self.set_window_icon()
 
+        # --- Thiết lập đường dẫn và queue ---
         self.base_path = config.ROOT_DIR
         self.modules_path = config.MODULES_DIR
         self.notebooks_path = config.NOTEBOOKS_DIR
@@ -50,21 +127,17 @@ class NotebookRunner:
         self.running_threads = {}
 
         self.setup_ui()
+        self.apply_stylesheet()
+
         self.refresh_notebook_list()
 
+        # --- Timer để kiểm tra output queue ---
+        self.queue_timer = QTimer(self)
+        self.queue_timer.timeout.connect(self.check_output_queue)
+        self.queue_timer.start(100)
+
+        # --- Cập nhật kích thước cửa sổ ban đầu ---
         self._update_window_size(initial=True)
-
-        self.check_output_queue()
-        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
-
-    def _update_window_size(self, initial=False):
-        """Cập nhật kích thước cửa sổ để vừa với nội dung."""
-        self.root.update_idletasks()
-        req_width = self.root.winfo_reqwidth()
-        fixed_height = 700
-        self.root.minsize(req_width + 10, fixed_height)
-        if initial:
-            self.root.geometry(f"{req_width + 10}x{fixed_height}")
 
     def get_resource_path(self, relative_path):
         if getattr(sys, "frozen", False):
@@ -76,251 +149,415 @@ class NotebookRunner:
         try:
             icon_path = self.get_resource_path("logo.ico") if getattr(sys, "frozen", False) else config.ICON_PATH
             if os.path.exists(icon_path):
-                self.root.iconbitmap(icon_path)
+                self.setWindowIcon(QIcon(icon_path))
         except Exception as e:
             print(f"[ERROR] Không thể thiết lập icon: {e}")
 
-    def setup_ui(self):
-        """Thiết lập giao diện người dùng với layout pack và tự động co giãn."""
-        global style
-        style = ttk.Style()
-        style.configure("CanvasFrame.TFrame", background="#ffffff")
-        style.configure("Card.TFrame", background="white", borderwidth=1, relief="solid")
-        style.configure("Selected.TFrame", background="#cce5ff", borderwidth=1, relief="solid")
+    def _update_window_size(self, initial=False):
+        """Cập nhật kích thước cửa sổ - chỉ set minimum size."""
+        if initial:
+            # Thiết lập kích thước ban đầu hợp lý
+            self.resize(1000, 700)
 
-        main_frame = ttk.Frame(self.root, padding=5)
-        main_frame.pack(fill=tk.BOTH, expand=True)
+    def setup_ui(self):
+        """Thiết lập giao diện đơn giản với log và danh sách notebooks."""
+        main_widget = QWidget()
+        main_widget.setObjectName("MainWidget")
+        self.setCentralWidget(main_widget)
+        main_layout = QVBoxLayout(main_widget)
+        main_layout.setContentsMargins(15, 15, 15, 15)
+
+        # Tạo QSplitter để có thể kéo thả resize các cột
+        main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        main_splitter.setObjectName("MainSplitter")
+        main_splitter.setHandleWidth(8)
 
         # --- 1. Cột Log (bên trái) ---
-        log_frame = ttk.Frame(main_frame)
-        log_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 5))
+        log_group = QGroupBox("📊 Console Log")
+        log_group.setObjectName("LogGroup")
+        log_layout = QVBoxLayout(log_group)
+        log_layout.setSpacing(8)
+        log_layout.setContentsMargins(12, 20, 12, 12)
 
-        log_container = ttk.LabelFrame(log_frame, text="Console Log", padding=5)
-        log_container.pack(fill=tk.BOTH, expand=True)
-        log_container.rowconfigure(0, weight=1)
-        log_container.columnconfigure(0, weight=1)
+        self.output_console = QTextEdit()
+        self.output_console.setReadOnly(True)
+        self.output_console.setFont(QFont("JetBrains Mono", 9))
+        self.output_console.setObjectName("Console")
 
-        self.output_console = scrolledtext.ScrolledText(log_container, wrap=tk.WORD, width=50)
-        self.output_console.grid(row=0, column=0, sticky="nsew")
+        clear_log_button = QPushButton("🗑️ Xóa Console")
+        clear_log_button.setObjectName("ClearButton")
+        clear_log_button.clicked.connect(self.clear_console)
 
-        log_controls_frame = ttk.Frame(log_container)
-        log_controls_frame.grid(row=1, column=0, sticky="ew", pady=(5, 0))
-        ttk.Button(log_controls_frame, text="Xóa Console", command=self.clear_console).pack(side=tk.LEFT)
+        log_layout.addWidget(self.output_console)
+        log_layout.addWidget(clear_log_button)
+        log_group.setMinimumWidth(300)  # Giảm minimum width
+        main_splitter.addWidget(log_group)
 
-        # --- 2. Cột Notebooks có sẵn & Điều khiển toàn cục ---
-        available_frame_container = ttk.Frame(main_frame)
-        available_frame_container.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 5))
+        # --- 2. Cột Notebooks có sẵn & Điều khiển ---
+        available_container = QWidget()
+        available_container_layout = QVBoxLayout(available_container)
+        available_container_layout.setContentsMargins(0, 0, 0, 0)
+        available_container_layout.setSpacing(10)
 
-        available_frame = ttk.LabelFrame(available_frame_container, text="Notebooks có sẵn", padding=5)
-        available_frame.pack(fill=tk.BOTH, expand=True)
-        available_frame.grid_rowconfigure(0, weight=1)
-        available_frame.grid_columnconfigure(0, weight=1)
+        available_group = QGroupBox("📚 Notebooks có sẵn")
+        available_group.setObjectName("AvailableGroup")
+        available_layout = QVBoxLayout(available_group)
+        available_layout.setContentsMargins(12, 20, 12, 12)
+        available_layout.setSpacing(8)
 
-        self.available_canvas = tk.Canvas(available_frame, borderwidth=0, background="#ffffff", highlightthickness=0, width=280)
-        self.available_cards_frame = ttk.Frame(self.available_canvas, style="CanvasFrame.TFrame")
-        available_scrollbar = ttk.Scrollbar(available_frame, orient="vertical", command=self.available_canvas.yview)
-        self.available_canvas.configure(yscrollcommand=available_scrollbar.set)
-        available_scrollbar.grid(row=0, column=1, sticky="ns")
-        self.available_canvas.grid(row=0, column=0, sticky="nsew")
-        self.available_canvas_window = self.available_canvas.create_window((0, 0), window=self.available_cards_frame, anchor="nw")
-        self.available_cards_frame.bind(
-            "<Configure>", lambda e: self.available_canvas.configure(scrollregion=self.available_canvas.bbox("all"))
-        )
-        self.available_canvas.bind("<Configure>", lambda e: self.available_canvas.itemconfig(self.available_canvas_window, width=e.width))
+        self.available_scroll_area = QScrollArea()
+        self.available_scroll_area.setWidgetResizable(True)
+        self.available_scroll_area.setObjectName("AvailableScrollArea")
+        self.available_cards_widget = QWidget()
+        self.available_cards_widget.setObjectName("CardsContainer")
+        self.available_cards_layout = QVBoxLayout(self.available_cards_widget)
+        self.available_cards_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.available_cards_layout.setSpacing(6)
+        self.available_scroll_area.setWidget(self.available_cards_widget)
+        available_layout.addWidget(self.available_scroll_area)
 
-        global_controls = ttk.LabelFrame(available_frame_container, text="Điều khiển toàn cục", padding=5)
-        global_controls.pack(fill=tk.X, side=tk.BOTTOM, pady=(5, 0))
+        # Các nút điều khiển
+        controls_group = QGroupBox("⚙️ Điều khiển")
+        controls_group.setObjectName("ControlsGroup")
+        controls_layout = QVBoxLayout(controls_group)
+        controls_layout.setContentsMargins(12, 20, 12, 12)
+        controls_layout.setSpacing(8)
 
-        ttk.Button(global_controls, text="Làm Mới Danh Sách", command=self.refresh_notebook_list).pack(fill=tk.X, pady=(0, 5))
-        ttk.Button(global_controls, text="Dừng Tất Cả", command=self.stop_all_notebooks).pack(fill=tk.X)
+        refresh_button = QPushButton("🔄 Làm Mới Danh Sách")
+        refresh_button.setObjectName("RefreshButton")
+        refresh_button.clicked.connect(self.refresh_notebook_list)
 
-        # --- 3. Khu vực Sections (động) ---
-        self.sections_container = ttk.Frame(main_frame)
-        self.sections_container.pack(side=tk.LEFT, fill=tk.Y)
+        run_selected_button = QPushButton("▶️ Chạy Notebooks Đã Chọn")
+        run_selected_button.setObjectName("RunSelectedButton")
+        run_selected_button.clicked.connect(self.run_selected_notebooks)
 
-        self.add_section_button = ttk.Button(self.sections_container, text="+", command=self._add_section, width=3)
-        self.add_section_button.pack(side=tk.LEFT, fill=tk.Y)
+        stop_all_button = QPushButton("⏹️ Dừng Tất Cả")
+        stop_all_button.setObjectName("StopButton")
+        stop_all_button.clicked.connect(self.stop_all_notebooks)
 
-    def _add_section(self):
-        """Tạo một cột section mới, pack nó vào trước nút Add và mở rộng cửa sổ."""
-        section_id = self.next_section_id
-        self.next_section_id += 1
+        controls_layout.addWidget(refresh_button)
+        controls_layout.addWidget(run_selected_button)
+        controls_layout.addWidget(stop_all_button)
 
-        section_name = f"Section {section_id + 1}"
+        available_container_layout.addWidget(available_group)
+        available_container_layout.addWidget(controls_group)
+        available_container.setMinimumWidth(300)  # Giảm minimum width
+        main_splitter.addWidget(available_container)
 
-        # Tạm thời gỡ nút add ra
-        self.add_section_button.pack_forget()
+        # Thiết lập tỷ lệ ban đầu cho splitter
+        main_splitter.setSizes([400, 400])  # Giảm size ban đầu
+        main_splitter.setStretchFactor(0, 1)  # Console có thể stretch
+        main_splitter.setStretchFactor(1, 1)  # Available có thể stretch
 
-        section_frame = ttk.LabelFrame(self.sections_container, text=section_name, padding=5)
-        section_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 5))
+        main_layout.addWidget(main_splitter)
 
-        section_frame.grid_rowconfigure(1, weight=1)
-        section_frame.grid_columnconfigure(0, weight=1)
+    def apply_stylesheet(self):
+        stylesheet = """
+            /* === MAIN WINDOW === */
+            QMainWindow, #MainWidget {
+                background-color: #f8f9fa;
+                color: #2c3e50;
+                font-family: "Segoe UI", Arial, sans-serif;
+            }
+            
+            /* === GROUP BOXES === */
+            QGroupBox {
+                font-family: "Segoe UI";
+                font-size: 11pt;
+                font-weight: bold;
+                border: 2px solid #e9ecef;
+                border-radius: 12px;
+                margin-top: 12px;
+                padding-top: 8px;
+                background-color: #ffffff;
+                color: #2c3e50;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 0 8px;
+                left: 15px;
+                color: #495057;
+                background-color: #ffffff;
+            }
+            
+            #LogGroup, #AvailableGroup, #ControlsGroup, #SectionGroup {
+                border: 2px solid #dee2e6;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);
+            }
+            
+            #SectionGroup {
+                border: 2px solid #dee2e6;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);
+                border-radius: 12px;
+                padding: 5px;
+            }
+            
+            #DefaultSectionGroup {
+                border: 3px solid #28a745;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #d4edda, stop:1 #c3e6cb);
+                border-radius: 12px;
+                padding: 5px;
+            }
+            
+            /* === BUTTONS === */
+            QPushButton {
+                font-family: "Segoe UI";
+                font-size: 10pt;
+                font-weight: 500;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #007bff, stop:1 #0056b3);
+                color: #ffffff;
+                border: none;
+                padding: 10px 16px;
+                border-radius: 8px;
+                min-height: 20px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0056b3, stop:1 #004085);
+                color: #ffffff;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #004085, stop:1 #002752);
+                color: #ffffff;
+            }
+            
+            /* === SPECIALIZED BUTTONS === */
+            #ClearButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6c757d, stop:1 #495057);
+            }
+            #ClearButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #495057, stop:1 #343a40);
+            }
+            
+            #RefreshButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #28a745, stop:1 #1e7e34);
+            }
+            #RefreshButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1e7e34, stop:1 #155724);
+            }
+            
+            #StopButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #dc3545, stop:1 #bd2130);
+            }            #StopButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #bd2130, stop:1 #a71e2a);
+            }
 
-        header_frame = ttk.Frame(section_frame)
-        header_frame.grid(row=0, column=0, sticky="ew")
-        header_frame.columnconfigure(0, weight=1)
-        title_label = ttk.Label(header_frame, text=section_name, font=("Segoe UI", 10, "bold"))
-        title_label.grid(row=0, column=0, sticky="w")
-        title_label.bind("<Double-1>", lambda e, sid=section_id: self._rename_section(sid))
-        ttk.Button(header_frame, text="X", width=2, command=lambda sid=section_id: self._close_section(sid)).grid(
-            row=0, column=1, sticky="e"
-        )
+            /* === TEXT AREAS === */
+            #Console {
+                background-color: #1e1e1e;
+                color: #ffffff;
+                border: 2px solid #495057;
+                border-radius: 8px;
+                padding: 8px;
+                font-family: "JetBrains Mono", "Consolas", monospace;
+                selection-background-color: #007acc;
+            }
+            
+            QTextEdit {
+                background-color: #ffffff;
+                border: 2px solid #dee2e6;
+                border-radius: 8px;
+                color: #2c3e50;
+                padding: 8px;
+            }
+            
+            /* === SCROLL AREAS === */
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+            #AvailableScrollArea, #SectionScrollArea, #SectionsScrollArea {
+                border: 1px solid #e9ecef;
+                border-radius: 8px;
+                background-color: #ffffff;
+            }
+            
+            /* === CARDS CONTAINER === */
+            #CardsContainer {
+                background-color: #ffffff;
+                border-radius: 6px;
+            }
+            #SectionsContainer {
+                background-color: transparent;
+            }
+            
+            /* === CARDS === */
+            #Card, #SelectedCard {
+                border: 2px solid #e9ecef;
+                border-radius: 10px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);
+                margin: 2px;
+                padding: 4px;
+            }
+            #Card:hover {
+                border: 2px solid #007bff;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e3f2fd, stop:1 #bbdefb);
+            }
+            #SelectedCard {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #cce5ff, stop:1 #99d6ff);
+                border: 2px solid #007bff;
+            }
+            
+            /* === LABELS === */
+            QLabel, #CardLabel {
+                background-color: transparent;
+                border: none;
+                color: #2c3e50;
+            }
+            
+            #SectionsTitle {
+                color: #495057;
+                font-size: 12pt;
+                font-weight: bold;
+            }
+            
+            #SectionTitle {
+                color: #343a40;
+                font-weight: bold;
+                padding: 5px 10px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f8f9fa, stop:1 #e9ecef);
+                border-radius: 8px;
+                border: 1px solid #dee2e6;
+            }
+            #SectionTitle:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e3f2fd, stop:1 #bbdefb);
+                border: 1px solid #007bff;
+            }
+            
+            /* === HEADERS === */
+            #SectionsHeader {
+                background-color: transparent;
+                padding: 8px 0px;
+                border-bottom: 1px solid #e9ecef;
+            }
+            
+            #SectionHeader {
+                background-color: transparent;
+                padding: 2px 0px;
+            }
+            
+            /* === MESSAGE BOXES === */
+            QMessageBox {
+                background-color: #ffffff;
+                color: #2c3e50;
+            }
+            QMessageBox QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #007bff, stop:1 #0056b3);
+                color: #ffffff;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 6px;
+                min-width: 80px;
+            }
+            QMessageBox QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0056b3, stop:1 #004085);
+            }
+            
+            /* === INPUT DIALOGS === */
+            QInputDialog {
+                background-color: #ffffff;
+                color: #2c3e50;
+            }
+            QInputDialog QLineEdit {
+                background-color: #ffffff;
+                border: 2px solid #dee2e6;
+                border-radius: 6px;
+                padding: 8px;
+                color: #2c3e50;
+            }
+              /* === SPLITTER === */
+            QSplitter {
+                background-color: #f8f9fa;
+            }
+            QSplitter::handle {
+                background: transparent;
+                border: none;
+                margin: 0px;
+            }
+            QSplitter::handle:horizontal {
+                width: 6px;
+                border-radius: 0px;
+            }
+            QSplitter::handle:hover {
+                background: rgba(0, 123, 255, 0.1);
+                border: none;
+            }
+            #MainSplitter {
+                background-color: transparent;
+            }
 
-        canvas = tk.Canvas(section_frame, borderwidth=0, background="#ffffff", highlightthickness=0, width=280)
-        cards_frame = ttk.Frame(canvas, style="CanvasFrame.TFrame")
-        scrollbar = ttk.Scrollbar(section_frame, orient="vertical", command=canvas.yview)
-        canvas.configure(yscrollcommand=scrollbar.set)
-        scrollbar.grid(row=1, column=1, sticky="ns")
-        canvas.grid(row=1, column=0, sticky="nsew")
-        canvas_window = canvas.create_window((0, 0), window=cards_frame, anchor="nw")
-        cards_frame.bind("<Configure>", lambda e, c=canvas: c.configure(scrollregion=c.bbox("all")))
-        canvas.bind("<Configure>", lambda e, c=canvas, cw=canvas_window: c.itemconfig(cw, width=e.width))
+            // ...existing code...
+        """
+        self.setStyleSheet(stylesheet)
 
-        buttons_frame = ttk.Frame(section_frame)
-        buttons_frame.grid(row=2, column=0, sticky="ew", pady=(5, 0))
-        buttons_frame.columnconfigure((0, 1), weight=1)
-        ttk.Button(buttons_frame, text="<< Thêm", command=lambda sid=section_id: self._move_to_section(sid)).grid(
-            row=0, column=0, columnspan=2, sticky="ew", pady=(0, 5)
-        )
-        ttk.Button(buttons_frame, text="Chạy Chọn", command=lambda sid=section_id: self._run_highlighted_in_section(sid)).grid(
-            row=1, column=0, sticky="ew", padx=(0, 2)
-        )
-        ttk.Button(buttons_frame, text="Chạy Section", command=lambda sid=section_id: self._run_section(sid)).grid(
-            row=1, column=1, sticky="ew", padx=(2, 0)
-        )
-        ttk.Button(buttons_frame, text="Bỏ chọn >>", command=lambda sid=section_id: self._move_from_section(sid)).grid(
-            row=2, column=0, columnspan=2, sticky="ew", pady=(5, 0)
-        )
+    def _create_card_in_list(self, path, parent_layout, card_dict):
+        description = self.get_notebook_description(path)
+        card = NotebookCard(path, description)
+        card.clicked.connect(self._on_card_click)  # Connect signal
+        parent_layout.addWidget(card)
+        card_dict[path] = card
 
-        self.sections[section_id] = {
-            "name": section_name,
-            "frame": section_frame,
-            "title_label": title_label,
-            "canvas": canvas,
-            "cards_frame": cards_frame,
-            "notebook_cards": {},
-            "highlighted": set(),
-        }
+    def _on_card_click(self, path):
+        # Xác định card và list chứa nó (chỉ có available notebooks bây giờ)
+        if path not in self.available_notebook_cards:
+            return
 
-        # Pack lại nút Add ở cuối
-        self.add_section_button.pack(side=tk.LEFT, fill=tk.Y)
-        # Cập nhật kích thước cửa sổ
-        self._update_window_size()
+        card_list = self.available_notebook_cards
+        selection_set = self.highlighted_available
 
-    def _close_section(self, section_id):
-        """Xóa một cột section và thu hẹp cửa sổ."""
-        if messagebox.askyesno("Xác nhận Xóa", f"Bạn có chắc muốn xóa '{self.sections[section_id]['name']}'?"):
-            section = self.sections[section_id]
-            for path in list(section["notebook_cards"].keys()):
-                self._create_card_in_list(
-                    path,
-                    self.available_cards_frame,
-                    self.available_notebook_cards,
-                    self.highlighted_available,
-                    self._on_card_click_available,
-                )
-            section["frame"].destroy()
-            del self.sections[section_id]
-            self.available_canvas.configure(scrollregion=self.available_canvas.bbox("all"))
-            # Cập nhật kích thước cửa sổ
-            self._update_window_size()
-
-    def _rename_section(self, section_id):
-        """Cho phép người dùng đổi tên section."""
-        current_name = self.sections[section_id]["name"]
-        new_name = simpledialog.askstring("Đổi tên Section", "Nhập tên mới:", initialvalue=current_name, parent=self.root)
-        if new_name and new_name.strip():
-            self.sections[section_id]["name"] = new_name
-            self.sections[section_id]["frame"].config(text=new_name)
-            self.sections[section_id]["title_label"].config(text=new_name)
-
-    def _on_card_click_available(self, event, path):
-        self._toggle_highlight(event, path, self.available_notebook_cards, self.highlighted_available)
-
-    def _on_card_click_in_section(self, event, path, section_id):
-        section = self.sections[section_id]
-        self._toggle_highlight(event, path, section["notebook_cards"], section["highlighted"])
-
-    def _toggle_highlight(self, event, path, card_list, selection_set):
-        is_ctrl_pressed = (event.state & 4) != 0
-        is_highlighted = path in selection_set
+        # Can't get event here directly, so we check modifiers from QApplication
+        is_ctrl_pressed = QApplication.keyboardModifiers() & Qt.KeyboardModifier.ControlModifier
+        card = card_list[path]
+        is_highlighted = card.is_highlighted
 
         if not is_ctrl_pressed:
+            # Bỏ chọn tất cả trong list hiện tại
             current_selection = list(selection_set)
             for p in current_selection:
-                self._unhighlight_card(p, card_list, selection_set)
-            if not is_highlighted or len(current_selection) > 1:
-                self._highlight_card(path, card_list, selection_set)
-        else:
-            if is_highlighted:
-                self._unhighlight_card(path, card_list, selection_set)
-            else:
-                self._highlight_card(path, card_list, selection_set)
-
-    def _highlight_card(self, path, card_list, selection_set):
-        card_info = card_list.get(path)
-        if card_info and not card_info.get("highlighted"):
-            card_info["highlighted"] = True
+                if p in card_list:
+                    card_list[p].set_highlighted(False)
+            selection_set.clear()
+            # Chọn card mới
+            card.set_highlighted(True)
             selection_set.add(path)
-            card_info["frame"].config(style="Selected.TFrame")
-            for widget in card_info["frame"].winfo_children():
-                widget.config(background=style.lookup("Selected.TFrame", "background"))
-
-    def _unhighlight_card(self, path, card_list, selection_set):
-        card_info = card_list.get(path)
-        if card_info and card_info.get("highlighted"):
-            card_info["highlighted"] = False
-            selection_set.discard(path)
-            card_info["frame"].config(style="Card.TFrame")
-            for widget in card_info["frame"].winfo_children():
-                widget.config(background=style.lookup("Card.TFrame", "background"))
+        else:
+            # Toggle chọn với Ctrl
+            card.set_highlighted(not is_highlighted)
+            if card.is_highlighted:
+                selection_set.add(path)
+            else:
+                selection_set.remove(path)
 
     def refresh_notebook_list(self):
-        for widget in self.available_cards_frame.winfo_children():
-            widget.destroy()
+        # Xóa các card cũ
+        for i in reversed(range(self.available_cards_layout.count())):
+            item = self.available_cards_layout.itemAt(i)
+            if item:
+                widget = item.widget()
+                if widget:
+                    widget.setParent(None)
         self.available_notebook_cards.clear()
         self.highlighted_available.clear()
-        paths_in_sections = {path for sec in self.sections.values() for path in sec["notebook_cards"]}
 
         try:
             if not os.path.exists(self.notebooks_path):
-                raise FileNotFoundError
+                raise FileNotFoundError(f"Thư mục không tồn tại: {self.notebooks_path}")
+
             notebook_files = sorted([f for f in os.listdir(self.notebooks_path) if f.endswith(".ipynb")])
-            available_files = [fn for fn in notebook_files if os.path.join(self.notebooks_path, fn) not in paths_in_sections]
 
-            if not available_files:
-                ttk.Label(self.available_cards_frame, text="Tất cả notebooks\nđã được chọn.", justify=tk.CENTER).pack(pady=20)
-                return
+            if not notebook_files:
+                no_files_label = QLabel("Không tìm thấy notebook.")
+                no_files_label.setWordWrap(True)
+                self.available_cards_layout.addWidget(no_files_label)
+            else:
+                for filename in notebook_files:
+                    path = os.path.join(self.notebooks_path, filename)
+                    self._create_card_in_list(path, self.available_cards_layout, self.available_notebook_cards)
 
-            for filename in available_files:
-                path = os.path.join(self.notebooks_path, filename)
-                self._create_card_in_list(
-                    path,
-                    self.available_cards_frame,
-                    self.available_notebook_cards,
-                    self.highlighted_available,
-                    self._on_card_click_available,
-                )
         except Exception as e:
-            ttk.Label(self.available_cards_frame, text=f"Lỗi: {e}", wraplength=250).pack()
-
-        self.available_cards_frame.update_idletasks()
-        self.available_canvas.config(scrollregion=self.available_canvas.bbox("all"))
-
-    def _create_card_in_list(self, path, parent_frame, card_list, selection_set, on_click_handler):
-        filename = os.path.basename(path)
-        card_frame = ttk.Frame(parent_frame, style="Card.TFrame", padding=5)
-        card_frame.pack(fill="x", pady=2, padx=2)
-        description = self.get_notebook_description(path)
-        lbl_filename = ttk.Label(card_frame, text=filename, font=("Segoe UI", 10, "bold"), background="white")
-        lbl_filename.pack(anchor="w", fill="x")
-        lbl_desc = ttk.Label(card_frame, text=description, font=("Segoe UI", 9), justify=tk.LEFT, background="white")
-        lbl_desc.pack(anchor="w", fill="x", pady=(2, 0))
-        card_list[path] = {"frame": card_frame, "highlighted": False}
-        card_frame.bind("<Button-1>", lambda e, p=path: on_click_handler(e, p))
-        lbl_filename.bind("<Button-1>", lambda e, p=path: on_click_handler(e, p))
-        lbl_desc.bind("<Button-1>", lambda e, p=path: on_click_handler(e, p))
+            error_label = QLabel(f"Lỗi: {e}")
+            error_label.setWordWrap(True)
+            self.available_cards_layout.addWidget(error_label)
 
     def get_notebook_description(self, path):
         try:
@@ -336,54 +573,14 @@ class NotebookRunner:
         except Exception:
             return "Không thể đọc mô tả."
 
-    def _move_to_section(self, section_id):
+    def run_selected_notebooks(self):
+        """Chạy các notebooks đã được chọn trong danh sách có sẵn."""
         if not self.highlighted_available:
+            QMessageBox.information(self, "Thông báo", "Vui lòng chọn ít nhất một notebook để chạy.", QMessageBox.StandardButton.Ok)
             return
-        section = self.sections[section_id]
+
+        self.log_message(f"--- Chạy {len(self.highlighted_available)} notebooks đã chọn ---")
         for path in list(self.highlighted_available):
-            card_info = self.available_notebook_cards.pop(path)
-            card_info["frame"].destroy()
-            self._create_card_in_list(
-                path,
-                section["cards_frame"],
-                section["notebook_cards"],
-                section["highlighted"],
-                lambda e, p=path, sid=section_id: self._on_card_click_in_section(e, p, sid),
-            )
-        self.highlighted_available.clear()
-        self.available_canvas.configure(scrollregion=self.available_canvas.bbox("all"))
-        section["canvas"].configure(scrollregion=section["canvas"].bbox("all"))
-
-    def _move_from_section(self, section_id):
-        section = self.sections[section_id]
-        if not section["highlighted"]:
-            return
-        for path in list(section["highlighted"]):
-            card_info = section["notebook_cards"].pop(path)
-            card_info["frame"].destroy()
-            self._create_card_in_list(
-                path, self.available_cards_frame, self.available_notebook_cards, self.highlighted_available, self._on_card_click_available
-            )
-        section["highlighted"].clear()
-        self.available_canvas.configure(scrollregion=self.available_canvas.bbox("all"))
-        section["canvas"].configure(scrollregion=section["canvas"].bbox("all"))
-
-    def _run_highlighted_in_section(self, section_id):
-        section = self.sections[section_id]
-        paths_to_run = list(section["highlighted"])
-        if not paths_to_run:
-            return
-        self.log_message(f"--- Chạy mục đã chọn trong '{section['name']}' ---")
-        for path in paths_to_run:
-            self.run_notebook(path)
-
-    def _run_section(self, section_id):
-        section = self.sections[section_id]
-        paths_to_run = list(section["notebook_cards"].keys())
-        if not paths_to_run:
-            return
-        self.log_message(f"--- Chạy tất cả trong '{section['name']}' ---")
-        for path in paths_to_run:
             self.run_notebook(path)
 
     def run_notebook(self, notebook_path):
@@ -402,8 +599,10 @@ class NotebookRunner:
             self.output_queue.put(f"[{notebook_name}] Bắt đầu...")
             with open(notebook_path, "r", encoding="utf-8") as f:
                 notebook = nbformat.read(f, as_version=4)
+
             python_code = self.convert_notebook_to_python(notebook)
             notebook_globals = {"__name__": f"nb_{notebook_name}", "__file__": notebook_path}
+
             old_stdout, old_stderr = sys.stdout, sys.stderr
             captured_output = io.StringIO()
             try:
@@ -427,44 +626,61 @@ class NotebookRunner:
         if not self.running_threads:
             self.log_message("Không có notebook nào đang chạy.")
             return
+
+        # Lưu ý: Việc dừng thread một cách an toàn trong Python là phức tạp.
+        # Cách tiếp cận này chỉ ngăn các thread mới bắt đầu và xóa tham chiếu.
+        # Các thread đang chạy sẽ tiếp tục cho đến khi hoàn thành.
         self.log_message(f"Gửi yêu cầu dừng {len(self.running_threads)} notebooks...")
         self.running_threads.clear()
-        messagebox.showinfo("Dừng Notebooks", "Đã gửi yêu cầu dừng tất cả notebooks.")
+        QMessageBox.information(self, "Dừng Notebooks", "Đã gửi yêu cầu dừng tất cả notebooks. Các tác vụ đang chạy sẽ hoàn thành.")
 
     def log_message(self, message):
         timestamp = time.strftime("%H:%M:%S")
-        self.output_queue.put(f"[{timestamp}] {message}\n")
+        self.output_queue.put(f"[{timestamp}] {message}")
 
     def check_output_queue(self):
-        try:
-            while True:
-                self.output_console.insert(tk.END, self.output_queue.get_nowait())
-        except queue.Empty:
-            pass
-        self.output_console.see(tk.END)
-        self.root.after(100, self.check_output_queue)
+        while not self.output_queue.empty():
+            message = self.output_queue.get_nowait()
+            self.output_console.append(message)
+            scrollbar = self.output_console.verticalScrollBar()
+            if scrollbar:
+                scrollbar.setValue(scrollbar.maximum())
 
     def clear_console(self):
-        self.output_console.delete(1.0, tk.END)
+        self.output_console.clear()
 
-    def on_closing(self):
-        if self.running_threads and messagebox.askokcancel("Thoát", "Notebook đang chạy, bạn chắc chắn muốn thoát?"):
-            self.root.destroy()
-        elif not self.running_threads:
-            self.root.destroy()
+    def closeEvent(self, a0: QCloseEvent | None) -> None:
+        if self.running_threads:
+            reply = QMessageBox.question(
+                self,
+                "Thoát",
+                "Notebook đang chạy, bạn chắc chắn muốn thoát?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if a0:
+                if reply == QMessageBox.StandardButton.Yes:
+                    a0.accept()
+                else:
+                    a0.ignore()
+        elif a0:
+            a0.accept()
 
     def convert_notebook_to_python(self, notebook):
         lines = []
         for cell in notebook.cells:
             if cell.cell_type == "code":
-                lines.append("".join(cell.source))
+                # Bỏ qua các magic command không thể thực thi trực tiếp
+                source_lines = [line for line in cell.source.split("\n") if not line.strip().startswith("%")]
+                lines.append("\n".join(source_lines))
         return "\n\n".join(lines)
 
 
 def main():
-    root = tk.Tk()
-    NotebookRunner(root)
-    root.mainloop()
+    app = QApplication(sys.argv)
+    window = NotebookRunner()
+    window.show()
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
