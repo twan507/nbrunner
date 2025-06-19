@@ -243,8 +243,85 @@ def get_stylesheet():
         QSplitter::handle:hover {
             background: rgba(0, 123, 255, 0.1);
             border: none;
-        }
-        #MainSplitter {
+        }        #MainSplitter {
             background-color: transparent;
+        }
+        
+        /* === SCROLLBARS === */
+        QScrollBar:vertical {
+            background: #f8f9fa;
+            width: 12px;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            margin: 0px;
+        }
+        QScrollBar::handle:vertical {
+            background: #adb5bd;
+            min-height: 20px;
+            border-radius: 5px;
+            margin: 1px;
+        }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+            border: none;
+            background: none;
+        }
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+            background: none;
+        }
+        QScrollBar:horizontal {
+            background: #f8f9fa;
+            height: 12px;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            margin: 0px;
+        }
+        QScrollBar::handle:horizontal {
+            background: #adb5bd;
+            min-width: 20px;
+            border-radius: 5px;
+            margin: 1px;
+        }
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+            border: none;
+            background: none;
+        }
+        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+            background: none;
+        }
+        
+        /* === SCROLLBARS FOR NOTEBOOK LIST === */
+        #AvailableScrollArea QScrollBar:vertical,
+        #SectionScrollArea QScrollBar:vertical,
+        #SectionsScrollArea QScrollBar:vertical {
+            background: #f1f3f4;
+            width: 10px;
+            border: none;
+            border-radius: 5px;
+        }
+        #AvailableScrollArea QScrollBar::handle:vertical,
+        #SectionScrollArea QScrollBar::handle:vertical,
+        #SectionsScrollArea QScrollBar::handle:vertical {
+            background: #c1c7cd;
+            border-radius: 5px;
+            min-height: 20px;
+            margin: 0px;
+        }
+        #AvailableScrollArea QScrollBar::add-line:vertical,
+        #AvailableScrollArea QScrollBar::sub-line:vertical,
+        #SectionScrollArea QScrollBar::add-line:vertical,
+        #SectionScrollArea QScrollBar::sub-line:vertical,
+        #SectionsScrollArea QScrollBar::add-line:vertical,
+        #SectionsScrollArea QScrollBar::sub-line:vertical {
+            border: none;
+            background: none;
+            height: 0px;
+        }
+        #AvailableScrollArea QScrollBar::add-page:vertical,
+        #AvailableScrollArea QScrollBar::sub-page:vertical,
+        #SectionScrollArea QScrollBar::add-page:vertical,
+        #SectionScrollArea QScrollBar::sub-page:vertical,
+        #SectionsScrollArea QScrollBar::add-page:vertical,
+        #SectionsScrollArea QScrollBar::sub-page:vertical {
+            background: none;
         }
     """
