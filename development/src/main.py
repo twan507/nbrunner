@@ -1,10 +1,6 @@
 import sys
 import os
-import threading
 import queue
-import time
-import io
-import traceback
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -22,26 +18,17 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QIcon, QFont, QCloseEvent, QMouseEvent
 
-# Import thư viện xử lý notebook
-try:
-    import nbformat
-except ImportError:
-    # Hiển thị lỗi bằng một cửa sổ đơn giản nếu PyQt chưa sẵn sàng
-    app = QApplication.instance()
-    if not app:
-        app = QApplication(sys.argv)
-    QMessageBox.critical(None, "Lỗi Import", "Không thể import nbformat. Vui lòng cài đặt thư viện cần thiết.")
-    sys.exit(1)
-
-# Import config
+# Import các module tùy chỉnh
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__))))
 try:
     import config
-except ImportError:
+    import functions
+    import styles
+except ImportError as e:
     app = QApplication.instance()
     if not app:
         app = QApplication(sys.argv)
-    QMessageBox.critical(None, "Lỗi Config", "Không thể import config.py. Vui lòng đảm bảo file config.py tồn tại.")
+    QMessageBox.critical(None, "Lỗi Import", f"Không thể import module cần thiết: {e}")
     sys.exit(1)
 
 
@@ -115,21 +102,15 @@ class NotebookRunner(QMainWindow):
         self.highlighted_available = set()
 
         self.set_window_icon()
-
         # --- Thiết lập đường dẫn và queue ---
-        self.base_path = config.ROOT_DIR
-        self.modules_path = config.MODULES_DIR
-        self.notebooks_path = config.NOTEBOOKS_DIR
-        if os.path.exists(self.modules_path) and self.modules_path not in sys.path:
-            sys.path.insert(0, self.modules_path)
+        self.base_path, self.modules_path, self.notebooks_path = functions.setup_paths()
 
         self.output_queue = queue.Queue()
         self.running_threads = {}
 
         self.setup_ui()
+        # Thử enable lại stylesheet
         self.apply_stylesheet()
-
-        self.refresh_notebook_list()
 
         # --- Timer để kiểm tra output queue ---
         self.queue_timer = QTimer(self)
@@ -139,15 +120,9 @@ class NotebookRunner(QMainWindow):
         # --- Cập nhật kích thước cửa sổ ban đầu ---
         self._update_window_size(initial=True)
 
-    def get_resource_path(self, relative_path):
-        if getattr(sys, "frozen", False):
-            base_path = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
-            return os.path.join(base_path, relative_path)
-        return os.path.join(config.ROOT_DIR, relative_path)
-
     def set_window_icon(self):
         try:
-            icon_path = self.get_resource_path("logo.ico") if getattr(sys, "frozen", False) else config.ICON_PATH
+            icon_path = functions.get_resource_path("logo.ico") if getattr(sys, "frozen", False) else config.ICON_PATH
             if os.path.exists(icon_path):
                 self.setWindowIcon(QIcon(icon_path))
         except Exception as e:
@@ -168,14 +143,14 @@ class NotebookRunner(QMainWindow):
         main_layout.setContentsMargins(15, 15, 15, 15)
 
         # Tạo QSplitter để có thể kéo thả resize các cột
-        main_splitter = QSplitter(Qt.Orientation.Horizontal)
-        main_splitter.setObjectName("MainSplitter")
-        main_splitter.setHandleWidth(8)
+        self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.main_splitter.setObjectName("MainSplitter")
+        self.main_splitter.setHandleWidth(8)
 
         # --- 1. Cột Log (bên trái) ---
-        log_group = QGroupBox("📊 Console Log")
-        log_group.setObjectName("LogGroup")
-        log_layout = QVBoxLayout(log_group)
+        self.log_group = QGroupBox("📊 Console Log")
+        self.log_group.setObjectName("LogGroup")
+        log_layout = QVBoxLayout(self.log_group)
         log_layout.setSpacing(8)
         log_layout.setContentsMargins(12, 20, 12, 12)
 
@@ -190,8 +165,12 @@ class NotebookRunner(QMainWindow):
 
         log_layout.addWidget(self.output_console)
         log_layout.addWidget(clear_log_button)
-        log_group.setMinimumWidth(300)  # Giảm minimum width
-        main_splitter.addWidget(log_group)
+        self.log_group.setMinimumWidth(300)  # Giảm minimum width
+        self.main_splitter.addWidget(self.log_group)
+
+        # Ẩn console mặc định
+        self.log_group.hide()
+        self.console_visible = False
 
         # --- 2. Cột Notebooks có sẵn & Điều khiển ---
         available_container = QWidget()
@@ -223,6 +202,11 @@ class NotebookRunner(QMainWindow):
         controls_layout.setContentsMargins(12, 20, 12, 12)
         controls_layout.setSpacing(8)
 
+        # Nút toggle console
+        self.toggle_console_button = QPushButton("📟 Hiện Console")
+        self.toggle_console_button.setObjectName("ToggleConsoleButton")
+        self.toggle_console_button.clicked.connect(self.toggle_console)
+
         refresh_button = QPushButton("🔄 Làm Mới Danh Sách")
         refresh_button.setObjectName("RefreshButton")
         refresh_button.clicked.connect(self.refresh_notebook_list)
@@ -235,445 +219,96 @@ class NotebookRunner(QMainWindow):
         stop_all_button.setObjectName("StopButton")
         stop_all_button.clicked.connect(self.stop_all_notebooks)
 
+        controls_layout.addWidget(self.toggle_console_button)
         controls_layout.addWidget(refresh_button)
         controls_layout.addWidget(run_selected_button)
         controls_layout.addWidget(stop_all_button)
 
         available_container_layout.addWidget(available_group)
         available_container_layout.addWidget(controls_group)
+
         available_container.setMinimumWidth(300)  # Giảm minimum width
-        main_splitter.addWidget(available_container)
+        self.main_splitter.addWidget(available_container)
 
-        # Thiết lập tỷ lệ ban đầu cho splitter
-        main_splitter.setSizes([400, 400])  # Giảm size ban đầu
-        main_splitter.setStretchFactor(0, 1)  # Console có thể stretch
-        main_splitter.setStretchFactor(1, 1)  # Available có thể stretch
+        # Thiết lập tỷ lệ ban đầu cho splitter (console ẩn nên để size [0, 800])
+        self.main_splitter.setSizes([0, 800])  # Console ẩn, available chiếm toàn bộ
+        self.main_splitter.setStretchFactor(0, 1)  # Console có thể stretch
+        self.main_splitter.setStretchFactor(1, 1)  # Available có thể stretch
+        main_layout.addWidget(self.main_splitter)
 
-        main_layout.addWidget(main_splitter)
+        # Khởi tạo danh sách notebook ngay lập tức
+        self.refresh_notebook_list()
+
+        # Force update UI
+        self.update()
+        QApplication.processEvents()
 
     def apply_stylesheet(self):
-        stylesheet = """
-            /* === MAIN WINDOW === */
-            QMainWindow, #MainWidget {
-                background-color: #f8f9fa;
-                color: #2c3e50;
-                font-family: "Segoe UI", Arial, sans-serif;
-            }
-            
-            /* === GROUP BOXES === */
-            QGroupBox {
-                font-family: "Segoe UI";
-                font-size: 11pt;
-                font-weight: bold;
-                border: 2px solid #e9ecef;
-                border-radius: 12px;
-                margin-top: 12px;
-                padding-top: 8px;
-                background-color: #ffffff;
-                color: #2c3e50;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                padding: 0 8px;
-                left: 15px;
-                color: #495057;
-                background-color: #ffffff;
-            }
-            
-            #LogGroup, #AvailableGroup, #ControlsGroup, #SectionGroup {
-                border: 2px solid #dee2e6;
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);
-            }
-            
-            #SectionGroup {
-                border: 2px solid #dee2e6;
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);
-                border-radius: 12px;
-                padding: 5px;
-            }
-            
-            #DefaultSectionGroup {
-                border: 3px solid #28a745;
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #d4edda, stop:1 #c3e6cb);
-                border-radius: 12px;
-                padding: 5px;
-            }
-            
-            /* === BUTTONS === */
-            QPushButton {
-                font-family: "Segoe UI";
-                font-size: 10pt;
-                font-weight: 500;
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #007bff, stop:1 #0056b3);
-                color: #ffffff;
-                border: none;
-                padding: 10px 16px;
-                border-radius: 8px;
-                min-height: 20px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0056b3, stop:1 #004085);
-                color: #ffffff;
-            }
-            QPushButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #004085, stop:1 #002752);
-                color: #ffffff;
-            }
-            
-            /* === SPECIALIZED BUTTONS === */
-            #ClearButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6c757d, stop:1 #495057);
-            }
-            #ClearButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #495057, stop:1 #343a40);
-            }
-            
-            #RefreshButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #28a745, stop:1 #1e7e34);
-            }
-            #RefreshButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1e7e34, stop:1 #155724);
-            }
-            
-            #StopButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #dc3545, stop:1 #bd2130);
-            }            #StopButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #bd2130, stop:1 #a71e2a);
-            }
-
-            /* === TEXT AREAS === */
-            #Console {
-                background-color: #1e1e1e;
-                color: #ffffff;
-                border: 2px solid #495057;
-                border-radius: 8px;
-                padding: 8px;
-                font-family: "JetBrains Mono", "Consolas", monospace;
-                selection-background-color: #007acc;
-            }
-            
-            QTextEdit {
-                background-color: #ffffff;
-                border: 2px solid #dee2e6;
-                border-radius: 8px;
-                color: #2c3e50;
-                padding: 8px;
-            }
-            
-            /* === SCROLL AREAS === */
-            QScrollArea {
-                border: none;
-                background-color: transparent;
-            }
-            #AvailableScrollArea, #SectionScrollArea, #SectionsScrollArea {
-                border: 1px solid #e9ecef;
-                border-radius: 8px;
-                background-color: #ffffff;
-            }
-            
-            /* === CARDS CONTAINER === */
-            #CardsContainer {
-                background-color: #ffffff;
-                border-radius: 6px;
-            }
-            #SectionsContainer {
-                background-color: transparent;
-            }
-            
-            /* === CARDS === */
-            #Card, #SelectedCard {
-                border: 2px solid #e9ecef;
-                border-radius: 10px;
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);
-                margin: 2px;
-                padding: 4px;
-            }
-            #Card:hover {
-                border: 2px solid #007bff;
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e3f2fd, stop:1 #bbdefb);
-            }
-            #SelectedCard {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #cce5ff, stop:1 #99d6ff);
-                border: 2px solid #007bff;
-            }
-            
-            /* === LABELS === */
-            QLabel, #CardLabel {
-                background-color: transparent;
-                border: none;
-                color: #2c3e50;
-            }
-            
-            #SectionsTitle {
-                color: #495057;
-                font-size: 12pt;
-                font-weight: bold;
-            }
-            
-            #SectionTitle {
-                color: #343a40;
-                font-weight: bold;
-                padding: 5px 10px;
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f8f9fa, stop:1 #e9ecef);
-                border-radius: 8px;
-                border: 1px solid #dee2e6;
-            }
-            #SectionTitle:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e3f2fd, stop:1 #bbdefb);
-                border: 1px solid #007bff;
-            }
-            
-            /* === HEADERS === */
-            #SectionsHeader {
-                background-color: transparent;
-                padding: 8px 0px;
-                border-bottom: 1px solid #e9ecef;
-            }
-            
-            #SectionHeader {
-                background-color: transparent;
-                padding: 2px 0px;
-            }
-            
-            /* === MESSAGE BOXES === */
-            QMessageBox {
-                background-color: #ffffff;
-                color: #2c3e50;
-            }
-            QMessageBox QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #007bff, stop:1 #0056b3);
-                color: #ffffff;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 6px;
-                min-width: 80px;
-            }
-            QMessageBox QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0056b3, stop:1 #004085);
-            }
-            
-            /* === INPUT DIALOGS === */
-            QInputDialog {
-                background-color: #ffffff;
-                color: #2c3e50;
-            }
-            QInputDialog QLineEdit {
-                background-color: #ffffff;
-                border: 2px solid #dee2e6;
-                border-radius: 6px;
-                padding: 8px;
-                color: #2c3e50;
-            }
-              /* === SPLITTER === */
-            QSplitter {
-                background-color: #f8f9fa;
-            }
-            QSplitter::handle {
-                background: transparent;
-                border: none;
-                margin: 0px;
-            }
-            QSplitter::handle:horizontal {
-                width: 6px;
-                border-radius: 0px;
-            }
-            QSplitter::handle:hover {
-                background: rgba(0, 123, 255, 0.1);
-                border: none;
-            }
-            #MainSplitter {
-                background-color: transparent;
-            }
-
-            // ...existing code...
-        """
-        self.setStyleSheet(stylesheet)
+        """Áp dụng stylesheet từ module styles"""
+        self.setStyleSheet(styles.get_stylesheet())
 
     def _create_card_in_list(self, path, parent_layout, card_dict):
-        description = self.get_notebook_description(path)
+        description = functions.get_notebook_description(path)
         card = NotebookCard(path, description)
         card.clicked.connect(self._on_card_click)  # Connect signal
         parent_layout.addWidget(card)
         card_dict[path] = card
 
     def _on_card_click(self, path):
-        # Xác định card và list chứa nó (chỉ có available notebooks bây giờ)
-        if path not in self.available_notebook_cards:
-            return
-
-        card_list = self.available_notebook_cards
-        selection_set = self.highlighted_available
-
-        # Can't get event here directly, so we check modifiers from QApplication
-        is_ctrl_pressed = QApplication.keyboardModifiers() & Qt.KeyboardModifier.ControlModifier
-        card = card_list[path]
-        is_highlighted = card.is_highlighted
-
-        if not is_ctrl_pressed:
-            # Bỏ chọn tất cả trong list hiện tại
-            current_selection = list(selection_set)
-            for p in current_selection:
-                if p in card_list:
-                    card_list[p].set_highlighted(False)
-            selection_set.clear()
-            # Chọn card mới
-            card.set_highlighted(True)
-            selection_set.add(path)
-        else:
-            # Toggle chọn với Ctrl
-            card.set_highlighted(not is_highlighted)
-            if card.is_highlighted:
-                selection_set.add(path)
-            else:
-                selection_set.remove(path)
+        functions.handle_card_click(path, self.available_notebook_cards, self.highlighted_available)
 
     def refresh_notebook_list(self):
-        # Xóa các card cũ
-        for i in reversed(range(self.available_cards_layout.count())):
-            item = self.available_cards_layout.itemAt(i)
-            if item:
-                widget = item.widget()
-                if widget:
-                    widget.setParent(None)
-        self.available_notebook_cards.clear()
-        self.highlighted_available.clear()
-
-        try:
-            if not os.path.exists(self.notebooks_path):
-                raise FileNotFoundError(f"Thư mục không tồn tại: {self.notebooks_path}")
-
-            notebook_files = sorted([f for f in os.listdir(self.notebooks_path) if f.endswith(".ipynb")])
-
-            if not notebook_files:
-                no_files_label = QLabel("Không tìm thấy notebook.")
-                no_files_label.setWordWrap(True)
-                self.available_cards_layout.addWidget(no_files_label)
-            else:
-                for filename in notebook_files:
-                    path = os.path.join(self.notebooks_path, filename)
-                    self._create_card_in_list(path, self.available_cards_layout, self.available_notebook_cards)
-
-        except Exception as e:
-            error_label = QLabel(f"Lỗi: {e}")
-            error_label.setWordWrap(True)
-            self.available_cards_layout.addWidget(error_label)
-
-    def get_notebook_description(self, path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                notebook = nbformat.read(f, as_version=4)
-            for cell in notebook.cells:
-                if cell.cell_type == "markdown":
-                    source = "".join(cell.source)
-                    for line in source.split("\n"):
-                        if line.strip().startswith("# "):
-                            return line.strip()[2:].strip()
-            return "Không có mô tả"
-        except Exception:
-            return "Không thể đọc mô tả."
+        functions.refresh_notebook_list(
+            self.notebooks_path,
+            self.available_cards_layout,
+            self.available_notebook_cards,
+            self.highlighted_available,
+            self._create_card_in_list,
+        )
 
     def run_selected_notebooks(self):
         """Chạy các notebooks đã được chọn trong danh sách có sẵn."""
-        if not self.highlighted_available:
-            QMessageBox.information(self, "Thông báo", "Vui lòng chọn ít nhất một notebook để chạy.", QMessageBox.StandardButton.Ok)
-            return
-
-        self.log_message(f"--- Chạy {len(self.highlighted_available)} notebooks đã chọn ---")
-        for path in list(self.highlighted_available):
-            self.run_notebook(path)
+        functions.run_selected_notebooks(self.highlighted_available, self.log_message, self.run_notebook)
 
     def run_notebook(self, notebook_path):
-        notebook_name = os.path.basename(notebook_path)
-        if notebook_path in self.running_threads:
-            self.log_message(f"[{notebook_name}] Đang chạy, bỏ qua.")
-            return
-        thread = threading.Thread(target=self._run_notebook_thread, args=(notebook_path,))
-        thread.daemon = True
-        self.running_threads[notebook_path] = thread
-        thread.start()
-
-    def _run_notebook_thread(self, notebook_path):
-        notebook_name = os.path.basename(notebook_path)
-        try:
-            self.output_queue.put(f"[{notebook_name}] Bắt đầu...")
-            with open(notebook_path, "r", encoding="utf-8") as f:
-                notebook = nbformat.read(f, as_version=4)
-
-            python_code = self.convert_notebook_to_python(notebook)
-            notebook_globals = {"__name__": f"nb_{notebook_name}", "__file__": notebook_path}
-
-            old_stdout, old_stderr = sys.stdout, sys.stderr
-            captured_output = io.StringIO()
-            try:
-                sys.stdout = sys.stderr = captured_output
-                exec(python_code, notebook_globals)
-                output = captured_output.getvalue()
-                if output.strip():
-                    self.output_queue.put(f"[{notebook_name}] Output:\n{output}")
-                self.output_queue.put(f"[{notebook_name}] Hoàn thành!")
-            except Exception as e:
-                self.output_queue.put(f"[{notebook_name}] Lỗi: {e}\n{traceback.format_exc()}")
-            finally:
-                sys.stdout, sys.stderr = old_stdout, old_stderr
-        except Exception as e:
-            self.output_queue.put(f"[{notebook_name}] Lỗi đọc file: {e}")
-        finally:
-            if notebook_path in self.running_threads:
-                del self.running_threads[notebook_path]
+        functions.run_notebook(notebook_path, self.running_threads, self.output_queue)
 
     def stop_all_notebooks(self):
-        if not self.running_threads:
-            self.log_message("Không có notebook nào đang chạy.")
-            return
-
-        # Lưu ý: Việc dừng thread một cách an toàn trong Python là phức tạp.
-        # Cách tiếp cận này chỉ ngăn các thread mới bắt đầu và xóa tham chiếu.
-        # Các thread đang chạy sẽ tiếp tục cho đến khi hoàn thành.
-        self.log_message(f"Gửi yêu cầu dừng {len(self.running_threads)} notebooks...")
-        self.running_threads.clear()
-        QMessageBox.information(self, "Dừng Notebooks", "Đã gửi yêu cầu dừng tất cả notebooks. Các tác vụ đang chạy sẽ hoàn thành.")
+        functions.stop_all_notebooks(self.running_threads, self.log_message)
 
     def log_message(self, message):
-        timestamp = time.strftime("%H:%M:%S")
-        self.output_queue.put(f"[{timestamp}] {message}")
+        functions.log_message(message, self.output_queue)
 
     def check_output_queue(self):
-        while not self.output_queue.empty():
-            message = self.output_queue.get_nowait()
-            self.output_console.append(message)
-            scrollbar = self.output_console.verticalScrollBar()
-            if scrollbar:
-                scrollbar.setValue(scrollbar.maximum())
+        functions.check_output_queue(self.output_queue, self.output_console)
+
+    def toggle_console(self):
+        """Ẩn/hiện console log"""
+        if self.console_visible:
+            self.log_group.hide()
+            self.toggle_console_button.setText("📟 Hiện Console")
+            self.console_visible = False
+            # Cập nhật lại size của splitter để console không chiếm chỗ
+            current_sizes = self.main_splitter.sizes()
+            self.main_splitter.setSizes([0, current_sizes[0] + current_sizes[1]])
+        else:
+            self.log_group.show()
+            self.toggle_console_button.setText("📟 Ẩn Console")
+            self.console_visible = True
+            # Chia đôi không gian cho console và available
+            total_width = self.main_splitter.width()
+            self.main_splitter.setSizes([total_width // 2, total_width // 2])
 
     def clear_console(self):
         self.output_console.clear()
 
     def closeEvent(self, a0: QCloseEvent | None) -> None:
-        if self.running_threads:
-            reply = QMessageBox.question(
-                self,
-                "Thoát",
-                "Notebook đang chạy, bạn chắc chắn muốn thoát?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
+        if functions.handle_close_event(self.running_threads):
             if a0:
-                if reply == QMessageBox.StandardButton.Yes:
-                    a0.accept()
-                else:
-                    a0.ignore()
-        elif a0:
-            a0.accept()
-
-    def convert_notebook_to_python(self, notebook):
-        lines = []
-        for cell in notebook.cells:
-            if cell.cell_type == "code":
-                # Bỏ qua các magic command không thể thực thi trực tiếp
-                source_lines = [line for line in cell.source.split("\n") if not line.strip().startswith("%")]
-                lines.append("\n".join(source_lines))
-        return "\n\n".join(lines)
+                a0.accept()
+        else:
+            if a0:
+                a0.ignore()
 
 
 def main():

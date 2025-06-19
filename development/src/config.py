@@ -15,11 +15,18 @@ def get_root_dir():
     else:
         # Khi chạy từ source code
         # Từ development/src/config.py -> lên 2 cấp để đến thư mục gốc
-        return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        current_file_dir = os.path.dirname(os.path.abspath(__file__))  # development/src
+        development_dir = os.path.dirname(current_file_dir)  # development
+        project_root = os.path.dirname(development_dir)  # nbrunner
+
+        return project_root
 
 
 # Lấy thư mục gốc
 ROOT_DIR = get_root_dir()
+
+# Debug flag
+DEBUG = False
 
 # Tên ứng dụng sẽ hiển thị trên thanh tiêu đề và file .exe
 APP_NAME = "Notebook Runner"
