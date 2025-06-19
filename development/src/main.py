@@ -9,14 +9,12 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QTextEdit,
     QScrollArea,
-    QLabel,
-    QFrame,
     QGroupBox,
     QMessageBox,
     QSplitter,
 )
-from PyQt6.QtCore import QTimer, Qt, pyqtSignal
-from PyQt6.QtGui import QIcon, QFont, QCloseEvent, QMouseEvent
+from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtGui import QFont, QCloseEvent
 
 # Import các module tùy chỉnh
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__))))
@@ -24,6 +22,7 @@ try:
     import config
     import functions
     import styles
+    from ui_components import NotebookCard, SectionWidget
 except ImportError as e:
     app = QApplication.instance()
     if not app:
@@ -32,74 +31,23 @@ except ImportError as e:
     sys.exit(1)
 
 
-class ClickableLabel(QLabel):
-    doubleClicked = pyqtSignal()
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def mouseDoubleClickEvent(self, a0: QMouseEvent | None) -> None:
-        self.doubleClicked.emit()
-        super().mouseDoubleClickEvent(a0)
-
-
-class NotebookCard(QFrame):
-    """Widget tùy chỉnh cho mỗi card notebook."""
-
-    clicked = pyqtSignal(str)  # Signal to emit the path on click
-
-    def __init__(self, path, description, parent=None):
-        super().__init__(parent)
-        self.path = path
-        self.is_highlighted = False
-        self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setObjectName("Card")
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(5)
-
-        self.filename_label = QLabel(os.path.basename(path))
-        self.filename_label.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        self.filename_label.setObjectName("CardLabel")
-        self.filename_label.setWordWrap(True)
-
-        self.desc_label = QLabel(description)
-        self.desc_label.setFont(QFont("Segoe UI", 9))
-        self.desc_label.setObjectName("CardLabel")
-        self.desc_label.setWordWrap(True)
-        self.desc_label.setStyleSheet("color: #666666;")
-
-        layout.addWidget(self.filename_label)
-        layout.addWidget(self.desc_label)
-
-    def mousePressEvent(self, a0: QMouseEvent | None) -> None:
-        self.clicked.emit(self.path)
-        super().mousePressEvent(a0)
-
-    def set_highlighted(self, highlighted):
-        self.is_highlighted = highlighted
-        if highlighted:
-            self.setObjectName("SelectedCard")
-        else:
-            self.setObjectName("Card")
-        # Re-polish to apply new style
-        style = self.style()
-        if style:
-            style.unpolish(self)
-            style.polish(self)
-
-
 class NotebookRunner(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(config.APP_NAME)
-        self.setMinimumSize(800, 600)  # Giảm minimum size để linh hoạt hơn
+        # Không set minimum size ở đây, sẽ tính dựa trên các cột
 
         # --- Cấu trúc dữ liệu ---
         self.available_notebook_cards = {}
-        self.highlighted_available = set()
+        self.highlighted_available = set()  # --- Quản lý sections ---
+        self.sections = {}  # Dict chứa các SectionWidget
+        self.section_counter = 0  # Counter để tạo ID unique cho section
+        self.available_container = None  # Sẽ được gán trong setup_ui
+
+        # --- Quản lý console visibility ---
+        self.console_visible = False
+        # --- Lưu trữ size gốc của notebook list để luôn khôi phục đúng ---
+        self.original_notebook_list_width = config.NOTEBOOK_LIST_INITIAL_WIDTH
 
         self.set_window_icon()
         # --- Thiết lập đường dẫn và queue ---
@@ -110,29 +58,55 @@ class NotebookRunner(QMainWindow):
 
         self.setup_ui()
         # Thử enable lại stylesheet
-        self.apply_stylesheet()
-
-        # --- Timer để kiểm tra output queue ---
+        self.apply_stylesheet()  # --- Timer để kiểm tra output queue ---
         self.queue_timer = QTimer(self)
         self.queue_timer.timeout.connect(self.check_output_queue)
-        self.queue_timer.start(100)
-
-        # --- Cập nhật kích thước cửa sổ ban đầu ---
+        self.queue_timer.start(100)  # --- Cập nhật kích thước cửa sổ ban đầu ---
         self._update_window_size(initial=True)
 
     def set_window_icon(self):
-        try:
-            icon_path = functions.get_resource_path("logo.ico") if getattr(sys, "frozen", False) else config.ICON_PATH
-            if os.path.exists(icon_path):
-                self.setWindowIcon(QIcon(icon_path))
-        except Exception as e:
-            print(f"[ERROR] Không thể thiết lập icon: {e}")
+        functions.setup_window_icon(self)
+
+    def _calculate_minimum_window_size(self):
+        """Tính toán kích thước minimum window dựa trên các cột đang hiển thị"""
+        min_width = 0
+        min_height = config.WINDOW_MIN_HEIGHT
+
+        # Cột notebooks luôn hiển thị
+        notebook_width = config.NOTEBOOK_LIST_MIN_WIDTH
+        # Thêm padding nếu có nhiều notebooks (có thể có scrollbar)
+        if hasattr(self, "available_notebook_cards") and len(self.available_notebook_cards) > 5:
+            notebook_width += config.NOTEBOOK_LIST_SCROLLBAR_PADDING
+        min_width += notebook_width
+
+        # Cột console nếu đang hiển thị
+        if hasattr(self, "console_visible") and self.console_visible:
+            min_width += config.CONSOLE_MIN_WIDTH
+
+        # Các cột sections
+        if hasattr(self, "sections"):
+            for section_widget in self.sections.values():
+                section_width = config.SECTION_MIN_WIDTH
+                # Thêm padding nếu section có nhiều notebooks (có thể có scrollbar)
+                if hasattr(section_widget, "notebook_cards") and len(section_widget.notebook_cards) > 5:
+                    section_width += config.SECTION_SCROLLBAR_PADDING
+                min_width += section_width
+
+        return min_width, min_height
+
+    def _update_window_minimum_size(self):
+        """Cập nhật minimum size của window"""
+        min_width, min_height = self._calculate_minimum_window_size()
+        print(f"DEBUG: Updating minimum size to {min_width}x{min_height}")
+        self.setMinimumSize(min_width, min_height)
+        print(f"DEBUG: Actual minimum size after setting: {self.minimumSize().width()}x{self.minimumSize().height()}")
 
     def _update_window_size(self, initial=False):
-        """Cập nhật kích thước cửa sổ - chỉ set minimum size."""
+        """Cập nhật kích thước cửa sổ ban đầu"""
         if initial:
-            # Thiết lập kích thước ban đầu hợp lý
-            self.resize(1000, 700)
+            # Thiết lập kích thước ban đầu: chỉ có cột notebooks
+            self.resize(config.WINDOW_INITIAL_WIDTH, config.WINDOW_INITIAL_HEIGHT)
+            self._update_window_minimum_size()
 
     def setup_ui(self):
         """Thiết lập giao diện đơn giản với log và danh sách notebooks."""
@@ -165,7 +139,7 @@ class NotebookRunner(QMainWindow):
 
         log_layout.addWidget(self.output_console)
         log_layout.addWidget(clear_log_button)
-        self.log_group.setMinimumWidth(300)  # Giảm minimum width
+        self.log_group.setMinimumWidth(config.CONSOLE_MIN_WIDTH)  # Console min width
         self.main_splitter.addWidget(self.log_group)
 
         # Ẩn console mặc định
@@ -173,8 +147,8 @@ class NotebookRunner(QMainWindow):
         self.console_visible = False
 
         # --- 2. Cột Notebooks có sẵn & Điều khiển ---
-        available_container = QWidget()
-        available_container_layout = QVBoxLayout(available_container)
+        self.available_container = QWidget()
+        available_container_layout = QVBoxLayout(self.available_container)
         available_container_layout.setContentsMargins(0, 0, 0, 0)
         available_container_layout.setSpacing(10)
 
@@ -187,6 +161,9 @@ class NotebookRunner(QMainWindow):
         self.available_scroll_area = QScrollArea()
         self.available_scroll_area.setWidgetResizable(True)
         self.available_scroll_area.setObjectName("AvailableScrollArea")
+        # Đặt minimum width để luôn có đủ chỗ cho scrollbar
+        self.available_scroll_area.setMinimumWidth(config.NOTEBOOK_LIST_MIN_WIDTH)
+
         self.available_cards_widget = QWidget()
         self.available_cards_widget.setObjectName("CardsContainer")
         self.available_cards_layout = QVBoxLayout(self.available_cards_widget)
@@ -209,35 +186,30 @@ class NotebookRunner(QMainWindow):
 
         refresh_button = QPushButton("🔄 Làm Mới Danh Sách")
         refresh_button.setObjectName("RefreshButton")
-        refresh_button.clicked.connect(self.refresh_notebook_list)
-
-        run_selected_button = QPushButton("▶️ Chạy Notebooks Đã Chọn")
-        run_selected_button.setObjectName("RunSelectedButton")
-        run_selected_button.clicked.connect(self.run_selected_notebooks)
-
-        stop_all_button = QPushButton("⏹️ Dừng Tất Cả")
-        stop_all_button.setObjectName("StopButton")
-        stop_all_button.clicked.connect(self.stop_all_notebooks)
+        refresh_button.clicked.connect(self.refresh_notebook_list)  # Nút thêm section mới
+        add_section_button = QPushButton("➕ Thêm Section Mới")
+        add_section_button.setObjectName("RefreshButton")
+        add_section_button.clicked.connect(self.create_new_section)
 
         controls_layout.addWidget(self.toggle_console_button)
         controls_layout.addWidget(refresh_button)
-        controls_layout.addWidget(run_selected_button)
-        controls_layout.addWidget(stop_all_button)
+        controls_layout.addWidget(add_section_button)
 
         available_container_layout.addWidget(available_group)
         available_container_layout.addWidget(controls_group)
 
-        available_container.setMinimumWidth(300)  # Giảm minimum width
-        self.main_splitter.addWidget(available_container)
+        self.available_container.setMinimumWidth(config.NOTEBOOK_LIST_MIN_WIDTH)  # Notebook list min width
+        self.main_splitter.addWidget(self.available_container)
 
-        # Thiết lập tỷ lệ ban đầu cho splitter (console ẩn nên để size [0, 800])
-        self.main_splitter.setSizes([0, 800])  # Console ẩn, available chiếm toàn bộ
+        # Thiết lập tỷ lệ ban đầu cho splitter (console ẩn, chỉ có notebook list)
+        self.main_splitter.setSizes(config.SPLITTER_INITIAL_SIZES)  # Console ẩn, available chiếm initial width
         self.main_splitter.setStretchFactor(0, 1)  # Console có thể stretch
         self.main_splitter.setStretchFactor(1, 1)  # Available có thể stretch
-        main_layout.addWidget(self.main_splitter)
-
-        # Khởi tạo danh sách notebook ngay lập tức
+        main_layout.addWidget(self.main_splitter)  # Khởi tạo danh sách notebook ngay lập tức
         self.refresh_notebook_list()
+
+        # Cập nhật minimum size sau khi setup UI hoàn tất
+        self._update_window_minimum_size()
 
         # Force update UI
         self.update()
@@ -263,6 +235,7 @@ class NotebookRunner(QMainWindow):
             self.available_cards_layout,
             self.available_notebook_cards,
             self.highlighted_available,
+            
             self._create_card_in_list,
         )
 
@@ -270,34 +243,72 @@ class NotebookRunner(QMainWindow):
         """Chạy các notebooks đã được chọn trong danh sách có sẵn."""
         functions.run_selected_notebooks(self.highlighted_available, self.log_message, self.run_notebook)
 
+    
     def run_notebook(self, notebook_path):
         functions.run_notebook(notebook_path, self.running_threads, self.output_queue)
 
+    
     def stop_all_notebooks(self):
         functions.stop_all_notebooks(self.running_threads, self.log_message)
 
     def log_message(self, message):
         functions.log_message(message, self.output_queue)
 
+    
     def check_output_queue(self):
         functions.check_output_queue(self.output_queue, self.output_console)
 
     def toggle_console(self):
-        """Ẩn/hiện console log"""
+        """Ẩn/hiện console log và cập nhật minimum size của window"""
+        console_display_width = config.CONSOLE_DISPLAY_WIDTH  # Độ rộng hiển thị của console
+
         if self.console_visible:
+            # Ẩn console
             self.log_group.hide()
             self.toggle_console_button.setText("📟 Hiện Console")
-            self.console_visible = False
-            # Cập nhật lại size của splitter để console không chiếm chỗ
+            self.console_visible = False  # Lưu kích thước hiện tại của các cột (trừ console)
             current_sizes = self.main_splitter.sizes()
-            self.main_splitter.setSizes([0, current_sizes[0] + current_sizes[1]])
+            if len(current_sizes) > 1:
+                # Đảm bảo notebook list giữ kích thước gốc, đặt console = 0
+                new_sizes = [0] + current_sizes[1:]
+                # Notebook list bây giờ ở vị trí index 1
+                if len(new_sizes) > 1:
+                    new_sizes[1] = self.original_notebook_list_width
+                    print(f"DEBUG: Toggle console OFF - Original notebook list width: {self.original_notebook_list_width}")
+                    print(f"DEBUG: Toggle console OFF - New sizes: {new_sizes}")
+                self.main_splitter.setSizes(new_sizes)
+
+            # Giảm kích thước window
+            current_width = self.width()
+            new_width = current_width - console_display_width
+            self.resize(new_width, self.height())
+
+            # Cập nhật minimum size
+            self._update_window_minimum_size()
+
         else:
+            # Hiện console
             self.log_group.show()
             self.toggle_console_button.setText("📟 Ẩn Console")
-            self.console_visible = True
-            # Chia đôi không gian cho console và available
-            total_width = self.main_splitter.width()
-            self.main_splitter.setSizes([total_width // 2, total_width // 2])
+            self.console_visible = True  # Lưu kích thước hiện tại của notebook list và sections
+            current_sizes = self.main_splitter.sizes()
+            if len(current_sizes) > 0:
+                # Chèn console vào đầu, đảm bảo notebook list giữ kích thước gốc
+                new_sizes = [console_display_width] + current_sizes[1:]
+                # Notebook list bây giờ ở vị trí index 1
+                if len(new_sizes) > 1:
+                    new_sizes[1] = self.original_notebook_list_width
+                    print(f"DEBUG: Toggle console ON - Original notebook list width: {self.original_notebook_list_width}")
+                    print(f"DEBUG: Toggle console ON - New sizes: {new_sizes}")
+                self.main_splitter.setSizes(new_sizes)
+
+            # Tăng kích thước window để chứa console
+            current_width = self.width()
+            new_width = current_width + console_display_width
+            self.resize(new_width, self.height())
+
+            # Cập nhật minimum size
+            self._update_window_minimum_size()
 
     def clear_console(self):
         self.output_console.clear()
@@ -310,13 +321,175 @@ class NotebookRunner(QMainWindow):
             if a0:
                 a0.ignore()
 
+    # === METHODS ĐỂ QUẢN LÝ SECTIONS ===
 
-def main():
-    app = QApplication(sys.argv)
-    window = NotebookRunner()
-    window.show()
-    sys.exit(app.exec())
+    def create_new_section(self):
+        """Tạo một section mới"""
+        section_name = functions.create_section_dialog(self, f"Section {self.section_counter + 1}")
 
+        if not section_name:
+            return
+
+        self.section_counter += 1
+        section_id = f"section_{self.section_counter}"
+
+        # Tạo SectionWidget
+        section_widget = SectionWidget(section_name, section_id, self)  # Kết nối signals
+        section_widget.notebook_add_requested.connect(self.add_notebooks_to_section)
+        section_widget.notebook_remove_requested.connect(self.remove_notebooks_from_section)
+        section_widget.section_close_requested.connect(self.close_section)
+
+        # Lưu kích thước hiện tại của tất cả các cột TRƯỚC khi thêm
+        current_sizes = self.main_splitter.sizes()
+        print(f"DEBUG: Tạo section - Current sizes before: {current_sizes}")
+
+        # Thêm vào splitter
+        self.main_splitter.addWidget(section_widget)
+        self.sections[section_id] = section_widget  # Sử dụng QTimer để đảm bảo widget đã được thêm hoàn toàn trước khi set sizes
+
+        # Tăng kích thước window để chứa section mới
+        current_width = self.width()
+        new_width = current_width + config.SECTION_DISPLAY_WIDTH
+        self.resize(new_width, self.height())
+
+        self.log_message(f"Đã tạo section mới: {section_name}")
+
+    def add_notebooks_to_section(self, section_widget):
+        """Thêm notebooks đã chọn từ danh sách tổng vào section"""
+        if not self.highlighted_available:
+            functions.show_no_notebooks_selected_message(self, "Vui lòng chọn ít nhất một notebook từ danh sách có sẵn.")
+            return
+
+        paths_to_move = list(self.highlighted_available)
+        moved_count = functions.move_notebooks_to_section(
+            paths_to_move, self.available_notebook_cards, self.available_cards_layout, section_widget, self.highlighted_available
+        )
+
+        self.log_message(f"Đã di chuyển {moved_count} notebooks vào {section_widget.section_name}")
+
+    def remove_notebooks_from_section(self, section_widget, paths):
+        """Trả notebooks từ section về danh sách tổng"""
+        moved_count = functions.move_notebooks_from_section(
+            paths, section_widget, self.available_cards_layout, self.available_notebook_cards, self._create_card_in_list
+        )
+
+        self.log_message(f"Đã trả {moved_count} notebooks từ {section_widget.section_name} về danh sách tổng")
+
+    def close_section(self, section_widget):
+        """Đóng một section"""
+        section_id = section_widget.section_id
+        
+        # Trả tất cả notebooks về danh sách tổng
+        if section_widget.notebook_cards:
+            paths_to_return = list(section_widget.notebook_cards.keys())
+            self.remove_notebooks_from_section(section_widget, paths_to_return)
+        
+        # Lưu kích thước hiện tại và tìm vị trí của section cần xóa
+        current_sizes = self.main_splitter.sizes()
+        section_index = -1
+        for i in range(self.main_splitter.count()):
+            if self.main_splitter.widget(i) == section_widget:
+                section_index = i
+                break
+        
+        print(f"DEBUG: Close section - Current sizes: {current_sizes}")
+        print(f"DEBUG: Close section - Section index: {section_index}")
+        
+        # Lấy kích thước section sẽ bị xóa để điều chỉnh window
+        section_width = 0
+        if section_index >= 0 and section_index < len(current_sizes):
+            section_width = current_sizes[section_index]
+          # Xóa section khỏi splitter trước
+        section_widget.cleanup()
+        # QSplitter không có removeWidget, cần dùng setParent(None) để xóa
+        section_widget.setParent(None)
+        section_widget.deleteLater()
+        
+        if section_id in self.sections:
+            del self.sections[section_id]
+        
+        # Sử dụng QTimer để đảm bảo widget đã bị xóa hoàn toàn trước khi restore sizes
+        def restore_sizes():
+            # Tạo danh sách sizes mới với notebook list width được fix cứng
+            splitter_count = self.main_splitter.count()
+            print(f"DEBUG: Close section (delayed) - Splitter count: {splitter_count}")
+            
+            if splitter_count > 0:
+                new_sizes = []
+                
+                # Xác định vị trí notebook list
+                notebook_list_index = 1 if self.console_visible else 0
+                
+                # Tạo sizes mới
+                for i in range(splitter_count):
+                    if i == 0 and self.console_visible:
+                        # Console column
+                        new_sizes.append(config.CONSOLE_DISPLAY_WIDTH)
+                    elif i == notebook_list_index:
+                        # Notebook list column - luôn fix cứng về kích thước gốc
+                        new_sizes.append(self.original_notebook_list_width)
+                    else:
+                        # Section columns - giữ kích thước hiện tại
+                        new_sizes.append(config.SECTION_DISPLAY_WIDTH)
+                
+                print(f"DEBUG: Close section (delayed) - Setting new sizes: {new_sizes}")
+                print(f"DEBUG: Close section (delayed) - Original notebook list width: {self.original_notebook_list_width}")
+                
+                # Set sizes và force update
+                self.main_splitter.setSizes(new_sizes)
+                
+                # Double-check và force lại nếu cần
+                actual_sizes = self.main_splitter.sizes()
+                print(f"DEBUG: Close section (delayed) - Actual sizes after first set: {actual_sizes}")
+                
+                if len(actual_sizes) > notebook_list_index and actual_sizes[notebook_list_index] != self.original_notebook_list_width:
+                    print("DEBUG: Close section (delayed) - Notebook list width incorrect, forcing again...")
+                    new_sizes[notebook_list_index] = self.original_notebook_list_width
+                    self.main_splitter.setSizes(new_sizes)
+                    print(f"DEBUG: Close section (delayed) - Final sizes: {self.main_splitter.sizes()}")
+        
+        # Delay để đảm bảo widget đã bị xóa hoàn toàn
+        QTimer.singleShot(50, restore_sizes)  # Tăng delay lên 50ms
+        
+        # Giảm kích thước window
+        if section_width > 0:
+            current_width = self.width()
+            new_width = current_width - section_width
+            self.resize(new_width, self.height())
+        
+        # Cập nhật minimum size sau khi xóa section
+        self._update_window_minimum_size()
+        
+        self.log_message(f"Đã đóng section: {section_widget.section_name}")
 
 if __name__ == "__main__":
-    main()
+    # Khởi tạo ứng dụng
+    app = QApplication(sys.argv)
+
+    # Thiết lập biểu tượng ứng dụng
+
+    functions.setup_application_icon(app)
+
+    # Tạo và hiển thị cửa sổ chính
+    window = NotebookRunner()
+    
+    # --- Căn giữa và di chuyển lệch cửa sổ khi khởi động ---
+    try:
+        screen = app.primaryScreen()
+        if screen:
+            screen_geometry = screen.availableGeometry()
+            window_geometry = window.frameGeometry()
+            # Căn giữa trước
+            window_geometry.moveCenter(screen_geometry.center())
+            # Sau đó di chuyển lệch
+            final_x = window_geometry.topLeft().x() - 500
+            final_y = window_geometry.topLeft().y() - 50
+            window.move(final_x, final_y)
+    except Exception as e:
+        # In ra lỗi nếu có vấn đề, nhưng không làm dừng chương trình
+        print(f"Lỗi khi định vị cửa sổ: {e}")
+
+    window.show()
+
+    # Chạy vòng lặp sự kiện
+    sys.exit(app.exec())

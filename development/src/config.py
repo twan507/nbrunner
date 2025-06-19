@@ -93,3 +93,27 @@ def get_pyinstaller_args():
 
 # Các tham số PyInstaller bổ sung
 PYINSTALLER_EXTRA_ARGS = get_pyinstaller_args()
+
+# ===== CÀI ĐẶT KÍCH THƯỚC UI =====
+
+# Kích thước cửa sổ
+WINDOW_MIN_HEIGHT = 800
+WINDOW_INITIAL_WIDTH = 600 
+WINDOW_INITIAL_HEIGHT = 800
+
+# Cột Console
+CONSOLE_MIN_WIDTH = 300
+CONSOLE_DISPLAY_WIDTH = 600  # Khi hiện console
+
+# Cột Notebook List
+NOTEBOOK_LIST_INITIAL_WIDTH = WINDOW_INITIAL_WIDTH
+NOTEBOOK_LIST_MIN_WIDTH = 300  # Tăng lên để luôn có đủ chỗ cho scrollbar
+NOTEBOOK_LIST_SCROLLBAR_PADDING = 50  # Thêm padding khi có thanh cuộn
+
+# Cột Section
+SECTION_MIN_WIDTH = 400  # Tăng lên để luôn có đủ chỗ cho scrollbar
+SECTION_DISPLAY_WIDTH = 400  # Khi tạo section mới
+SECTION_SCROLLBAR_PADDING = 50  # Thêm padding khi có thanh cuộn
+
+# Splitter ban đầu (console ẩn, chỉ có notebook list)
+SPLITTER_INITIAL_SIZES = [0, NOTEBOOK_LIST_INITIAL_WIDTH]

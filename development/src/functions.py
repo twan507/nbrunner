@@ -9,8 +9,9 @@ import time
 import io
 import traceback
 import nbformat
-from PyQt6.QtWidgets import QMessageBox, QApplication
+from PyQt6.QtWidgets import QMessageBox, QApplication, QInputDialog
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon
 import config
 
 
@@ -20,6 +21,131 @@ def get_resource_path(relative_path):
         base_path = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
         return os.path.join(base_path, relative_path)
     return os.path.join(config.ROOT_DIR, relative_path)
+
+
+def setup_window_icon(window):
+    """Thiết lập icon cho cửa sổ"""
+    try:
+        icon_path = get_resource_path("logo.ico") if getattr(sys, "frozen", False) else config.ICON_PATH
+        if os.path.exists(icon_path):
+            window.setWindowIcon(QIcon(icon_path))
+    except Exception as e:
+        print(f"[ERROR] Không thể thiết lập icon: {e}")
+
+
+def setup_application_icon(app):
+    """Thiết lập icon cho ứng dụng"""
+    if hasattr(config, "ICON_PATH") and os.path.exists(config.ICON_PATH):
+        app.setWindowIcon(QIcon(config.ICON_PATH))
+
+
+def update_window_size_for_section(window, section_added=True, section_width=None):
+    """Cập nhật kích thước cửa sổ khi thêm/xóa section"""
+    if section_width is None:
+        section_width = config.SECTION_DISPLAY_WIDTH
+
+    current_width = window.width()
+    current_height = window.height()
+
+    if section_added:
+        # Tăng chiều rộng window để chứa section mới
+        new_width = current_width + section_width
+        max_width = 1920  # Full HD width
+        new_width = min(new_width, max_width)
+    else:
+        # Giảm chiều rộng window
+        new_width = current_width - section_width
+        # Đảm bảo không nhỏ hơn kích thước tối thiểu
+        base_width = 800
+        console_width = 300 if hasattr(window, "console_visible") and window.console_visible else 0
+        min_width = base_width + console_width
+        new_width = max(new_width, min_width)
+
+    window.resize(new_width, current_height)
+
+
+def create_section_dialog(parent, default_name):
+    """Hiển thị dialog để tạo section mới"""
+    section_name, ok = QInputDialog.getText(parent, "Tạo Section Mới", "Nhập tên cho section:", text=default_name)
+
+    if ok and section_name.strip():
+        return section_name.strip()
+    return None
+
+
+def confirm_section_close(parent, section_name, notebook_count):
+    """Hiển thị dialog xác nhận đóng section"""
+    if notebook_count > 0:
+        reply = QMessageBox.question(
+            parent,
+            "Xác Nhận Đóng Section",
+            f"Section '{section_name}' có {notebook_count} notebooks. "
+            "Các notebooks sẽ được trả về danh sách tổng. Bạn có chắc chắn muốn đóng?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return reply == QMessageBox.StandardButton.Yes
+    return True
+
+
+def show_no_notebooks_selected_message(parent, message="Vui lòng chọn ít nhất một notebook."):
+    """Hiển thị thông báo khi không có notebook nào được chọn"""
+    QMessageBox.information(parent, "Thông báo", message)
+
+
+def show_no_running_notebooks_message(parent, message="Không có notebook nào đang chạy."):
+    """Hiển thị thông báo khi không có notebook nào đang chạy"""
+    QMessageBox.information(parent, "Thông báo", message)
+
+
+def move_notebooks_to_section(notebook_paths, available_cards, available_layout, section_widget, highlighted_set):
+    """Di chuyển notebooks từ danh sách tổng vào section"""
+    moved_count = 0
+
+    for path in notebook_paths:
+        if path in available_cards:
+            # Lấy thông tin notebook
+            description = get_notebook_description(path)
+
+            # Thêm vào section
+            section_widget.add_notebook_card(path, description)
+
+            # Xóa khỏi danh sách tổng
+            card = available_cards[path]
+            available_layout.removeWidget(card)
+            card.deleteLater()
+            del available_cards[path]
+            highlighted_set.discard(path)
+            moved_count += 1
+
+    return moved_count
+
+
+def move_notebooks_from_section(notebook_paths, section_widget, available_layout, available_cards, create_card_callback):
+    """Di chuyển notebooks từ section về danh sách tổng"""
+    moved_count = 0
+
+    for path in notebook_paths:
+        if path in section_widget.notebook_cards:
+            # Xóa khỏi section
+            section_widget.remove_notebook_card(path)
+
+            # Thêm lại vào danh sách tổng
+            create_card_callback(path, available_layout, available_cards)
+            moved_count += 1
+
+    return moved_count
+
+
+def calculate_window_size_for_sections(base_width, section_count, section_width, console_visible, console_width):
+    """Tính toán kích thước cửa sổ dựa trên số lượng sections"""
+    total_width = base_width + (section_count * section_width)
+    if console_visible:
+        total_width += console_width
+
+    # Giới hạn chiều rộng tối đa
+    max_width = 1920
+    return min(total_width, max_width)
 
 
 def get_notebook_description(path):
@@ -195,6 +321,53 @@ def run_notebook(notebook_path, running_threads, output_queue):
         output_queue.put(f"[{notebook_name}] Đang chạy, bỏ qua.")
         return
     thread = threading.Thread(target=run_notebook_thread, args=(notebook_path, output_queue, running_threads))
+    thread.daemon = True
+    running_threads[notebook_path] = thread
+    thread.start()
+
+
+def run_notebook_thread_with_section(notebook_path, output_queue, running_threads, section_name=None):
+    """Thread để chạy notebook với thông tin section"""
+    notebook_name = os.path.basename(notebook_path)
+    prefix = f"[{section_name}][{notebook_name}]" if section_name else f"[{notebook_name}]"
+
+    try:
+        output_queue.put(f"{prefix} Bắt đầu...")
+        with open(notebook_path, "r", encoding="utf-8") as f:
+            notebook = nbformat.read(f, as_version=4)
+
+        python_code = convert_notebook_to_python(notebook)
+        notebook_globals = {"__name__": f"nb_{notebook_name}", "__file__": notebook_path}
+
+        old_stdout, old_stderr = sys.stdout, sys.stderr
+        captured_output = io.StringIO()
+        try:
+            sys.stdout = sys.stderr = captured_output
+            exec(python_code, notebook_globals)
+            output = captured_output.getvalue()
+            if output.strip():
+                output_queue.put(f"{prefix} Output:\n{output}")
+            output_queue.put(f"{prefix} Hoàn thành!")
+        except Exception as e:
+            output_queue.put(f"{prefix} Lỗi: {e}\n{traceback.format_exc()}")
+        finally:
+            sys.stdout, sys.stderr = old_stdout, old_stderr
+    except Exception as e:
+        output_queue.put(f"{prefix} Lỗi đọc file: {e}")
+    finally:
+        if notebook_path in running_threads:
+            del running_threads[notebook_path]
+
+
+def run_notebook_with_section(notebook_path, running_threads, output_queue, section_name=None):
+    """Chạy một notebook với thông tin section"""
+    notebook_name = os.path.basename(notebook_path)
+    prefix = f"[{section_name}][{notebook_name}]" if section_name else f"[{notebook_name}]"
+
+    if notebook_path in running_threads:
+        output_queue.put(f"{prefix} Đang chạy, bỏ qua.")
+        return
+    thread = threading.Thread(target=run_notebook_thread_with_section, args=(notebook_path, output_queue, running_threads, section_name))
     thread.daemon = True
     running_threads[notebook_path] = thread
     thread.start()

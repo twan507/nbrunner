@@ -33,17 +33,26 @@ def get_stylesheet():
             color: #495057;
             background-color: #ffffff;
         }
-        
-        #LogGroup, #AvailableGroup, #ControlsGroup, #SectionGroup {
+          #LogGroup, #AvailableGroup, #ControlsGroup {
             border: 2px solid #dee2e6;
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);
         }
         
         #SectionGroup {
-            border: 2px solid #dee2e6;
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);
+            border: 2px solid #007bff;
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f8fcff, stop:1 #e3f2fd);
             border-radius: 12px;
             padding: 5px;
+        }
+        
+        #SectionGroup::title {
+            subcontrol-origin: margin;
+            subcontrol-position: top left;
+            padding: 0 8px;
+            left: 15px;
+            color: #007bff;
+            background-color: #ffffff;
+            font-weight: bold;
         }
         
         #DefaultSectionGroup {
@@ -249,17 +258,17 @@ def get_stylesheet():
         
         /* === SCROLLBARS === */
         QScrollBar:vertical {
-            background: #f8f9fa;
-            width: 12px;
-            border: 1px solid #dee2e6;
-            border-radius: 6px;
+            background: transparent;
+            width: 2px;
+            border: none;
+            border-radius: 1px;
             margin: 0px;
         }
         QScrollBar::handle:vertical {
             background: #adb5bd;
             min-height: 20px;
-            border-radius: 5px;
-            margin: 1px;
+            border-radius: 1px;
+            margin: 0px;
         }
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
             border: none;
@@ -269,17 +278,17 @@ def get_stylesheet():
             background: none;
         }
         QScrollBar:horizontal {
-            background: #f8f9fa;
-            height: 12px;
-            border: 1px solid #dee2e6;
-            border-radius: 6px;
+            background: transparent;
+            height: 2px;
+            border: none;
+            border-radius: 1px;
             margin: 0px;
         }
         QScrollBar::handle:horizontal {
             background: #adb5bd;
             min-width: 20px;
-            border-radius: 5px;
-            margin: 1px;
+            border-radius: 1px;
+            margin: 0px;
         }
         QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
             border: none;
@@ -294,15 +303,15 @@ def get_stylesheet():
         #SectionScrollArea QScrollBar:vertical,
         #SectionsScrollArea QScrollBar:vertical {
             background: #f1f3f4;
-            width: 10px;
+            width: 2px;
             border: none;
-            border-radius: 5px;
+            border-radius: 1px;
         }
         #AvailableScrollArea QScrollBar::handle:vertical,
         #SectionScrollArea QScrollBar::handle:vertical,
         #SectionsScrollArea QScrollBar::handle:vertical {
             background: #c1c7cd;
-            border-radius: 5px;
+            border-radius: 1px;
             min-height: 20px;
             margin: 0px;
         }
