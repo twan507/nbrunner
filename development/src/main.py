@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox, filedialog
+from tkinter import ttk, scrolledtext, messagebox, simpledialog
 import threading
 import queue
 import sys
@@ -28,456 +28,441 @@ class NotebookRunner:
     def __init__(self, root):
         self.root = root
         self.root.title(config.APP_NAME)
-        self.root.geometry("1000x700")
+        self.root.resizable(True, True)
 
-        # Thiết lập icon cho cửa sổ và taskbar
+        # --- Cấu trúc dữ liệu cho Sections ---
+        self.sections = {}
+        self.next_section_id = 0
+
+        # Các biến theo dõi card và lựa chọn
+        self.available_notebook_cards = {}
+        self.highlighted_available = set()
+
         self.set_window_icon()
 
-        # Sử dụng ROOT_DIR từ config thay vì tính toán riêng
         self.base_path = config.ROOT_DIR
-
-        # Đường dẫn đến thư mục modules và notebooks
         self.modules_path = config.MODULES_DIR
-        self.notebooks_path = config.NOTEBOOKS_DIR  # Thêm modules path vào sys.path để có thể import
-        if os.path.exists(self.modules_path):
-            if self.modules_path not in sys.path:
-                sys.path.insert(0, self.modules_path)
-        else:
-            print(f"Warning: Modules path does not exist: {self.modules_path}")
+        self.notebooks_path = config.NOTEBOOKS_DIR
+        if os.path.exists(self.modules_path) and self.modules_path not in sys.path:
+            sys.path.insert(0, self.modules_path)
 
-        # Queue để giao tiếp giữa các thread
         self.output_queue = queue.Queue()
-
-        # Danh sách các thread đang chạy
         self.running_threads = {}
-
-        # Biến điều khiển auto-run
-        self.auto_run_enabled = False
-        self.auto_run_interval = 60  # seconds
-        self.auto_run_timer = None
 
         self.setup_ui()
         self.refresh_notebook_list()
 
-        # Bắt đầu kiểm tra output queue
-        self.check_output_queue()  # Xử lý sự kiện đóng cửa sổ
+        self._update_window_size(initial=True)
+
+        self.check_output_queue()
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
+    def _update_window_size(self, initial=False):
+        """Cập nhật kích thước cửa sổ để vừa với nội dung."""
+        self.root.update_idletasks()
+        req_width = self.root.winfo_reqwidth()
+        fixed_height = 700
+        self.root.minsize(req_width + 10, fixed_height)
+        if initial:
+            self.root.geometry(f"{req_width + 10}x{fixed_height}")
+
     def get_resource_path(self, relative_path):
-        """
-        Lấy đường dẫn tới resource, xử lý cả trường hợp development và production
-        """
         if getattr(sys, "frozen", False):
-            # Khi chạy từ .exe, PyInstaller đặt resource vào sys._MEIPASS
             base_path = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
             return os.path.join(base_path, relative_path)
-        else:
-            # Khi chạy từ source code
-            return os.path.join(config.ROOT_DIR, relative_path)
+        return os.path.join(config.ROOT_DIR, relative_path)
 
     def set_window_icon(self):
-        """
-        Thiết lập icon cho cửa sổ ứng dụng và taskbar
-        """
         try:
-            if getattr(sys, "frozen", False):
-                # Khi chạy từ .exe, icon được embed vào resource bundle
-                icon_path = self.get_resource_path("logo.ico")
-            else:
-                # Khi chạy từ source code
-                icon_path = config.ICON_PATH
-
+            icon_path = self.get_resource_path("logo.ico") if getattr(sys, "frozen", False) else config.ICON_PATH
             if os.path.exists(icon_path):
-                # Thiết lập icon cho cửa sổ tkinter
                 self.root.iconbitmap(icon_path)
-                print(f"[INFO] Đã thiết lập icon: {icon_path}")
-            else:
-                print(f"[WARNING] Icon file không tồn tại: {icon_path}")
         except Exception as e:
             print(f"[ERROR] Không thể thiết lập icon: {e}")
 
     def setup_ui(self):
-        """Thiết lập giao diện người dùng"""
-        # Frame chính
-        main_frame = ttk.Frame(self.root, padding="10")
-        main_frame.grid(row=0, column=0, sticky="nswe")
+        """Thiết lập giao diện người dùng với layout pack và tự động co giãn."""
+        global style
+        style = ttk.Style()
+        style.configure("CanvasFrame.TFrame", background="#ffffff")
+        style.configure("Card.TFrame", background="white", borderwidth=1, relief="solid")
+        style.configure("Selected.TFrame", background="#cce5ff", borderwidth=1, relief="solid")
 
-        # Cấu hình grid weights
-        self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
-        main_frame.columnconfigure(1, weight=1)
-        main_frame.rowconfigure(1, weight=1)
+        main_frame = ttk.Frame(self.root, padding=5)
+        main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Panel trái - Danh sách notebooks
-        left_frame = ttk.LabelFrame(main_frame, text="Notebooks", padding="5")
-        left_frame.grid(row=0, column=0, rowspan=3, sticky="nswe", padx=(0, 5))
-        left_frame.columnconfigure(0, weight=1)
-        left_frame.rowconfigure(0, weight=1)
+        # --- 1. Cột Log (bên trái) ---
+        log_frame = ttk.Frame(main_frame)
+        log_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 5))
 
-        # Listbox với scrollbar
-        listbox_frame = ttk.Frame(left_frame)
-        listbox_frame.grid(row=0, column=0, sticky="nswe")
-        listbox_frame.columnconfigure(0, weight=1)
-        listbox_frame.rowconfigure(0, weight=1)
+        log_container = ttk.LabelFrame(log_frame, text="Console Log", padding=5)
+        log_container.pack(fill=tk.BOTH, expand=True)
+        log_container.rowconfigure(0, weight=1)
+        log_container.columnconfigure(0, weight=1)
 
-        self.notebook_listbox = tk.Listbox(listbox_frame, selectmode=tk.EXTENDED)
-        self.notebook_listbox.grid(row=0, column=0, sticky="nswe")
+        self.output_console = scrolledtext.ScrolledText(log_container, wrap=tk.WORD, width=50)
+        self.output_console.grid(row=0, column=0, sticky="nsew")
 
-        listbox_scrollbar = ttk.Scrollbar(listbox_frame, orient="vertical", command=self.notebook_listbox.yview)
-        listbox_scrollbar.grid(row=0, column=1, sticky="ns")
-        self.notebook_listbox.configure(yscrollcommand=listbox_scrollbar.set)
+        log_controls_frame = ttk.Frame(log_container)
+        log_controls_frame.grid(row=1, column=0, sticky="ew", pady=(5, 0))
+        ttk.Button(log_controls_frame, text="Xóa Console", command=self.clear_console).pack(side=tk.LEFT)
 
-        # Nút điều khiển notebooks
-        buttons_frame = ttk.Frame(left_frame)
-        buttons_frame.grid(row=1, column=0, sticky="we", pady=(5, 0))
-        buttons_frame.columnconfigure(0, weight=1)
-        buttons_frame.columnconfigure(1, weight=1)
-        buttons_frame.columnconfigure(2, weight=1)
+        # --- 2. Cột Notebooks có sẵn & Điều khiển toàn cục ---
+        available_frame_container = ttk.Frame(main_frame)
+        available_frame_container.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 5))
 
-        self.run_button = ttk.Button(buttons_frame, text="Chạy Đã Chọn", command=self.run_selected_notebooks)
-        self.run_button.grid(row=0, column=0, sticky="we", padx=(0, 2))
+        available_frame = ttk.LabelFrame(available_frame_container, text="Notebooks có sẵn", padding=5)
+        available_frame.pack(fill=tk.BOTH, expand=True)
+        available_frame.grid_rowconfigure(0, weight=1)
+        available_frame.grid_columnconfigure(0, weight=1)
 
-        self.run_all_button = ttk.Button(buttons_frame, text="Chạy Tất Cả", command=self.run_all_notebooks)
-        self.run_all_button.grid(row=0, column=1, sticky="we", padx=(2, 2))
+        self.available_canvas = tk.Canvas(available_frame, borderwidth=0, background="#ffffff", highlightthickness=0, width=280)
+        self.available_cards_frame = ttk.Frame(self.available_canvas, style="CanvasFrame.TFrame")
+        available_scrollbar = ttk.Scrollbar(available_frame, orient="vertical", command=self.available_canvas.yview)
+        self.available_canvas.configure(yscrollcommand=available_scrollbar.set)
+        available_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.available_canvas.grid(row=0, column=0, sticky="nsew")
+        self.available_canvas_window = self.available_canvas.create_window((0, 0), window=self.available_cards_frame, anchor="nw")
+        self.available_cards_frame.bind(
+            "<Configure>", lambda e: self.available_canvas.configure(scrollregion=self.available_canvas.bbox("all"))
+        )
+        self.available_canvas.bind("<Configure>", lambda e: self.available_canvas.itemconfig(self.available_canvas_window, width=e.width))
 
-        self.stop_all_button = ttk.Button(buttons_frame, text="Dừng Tất Cả", command=self.stop_all_notebooks)
-        self.stop_all_button.grid(row=0, column=2, sticky="we", padx=(2, 0))
+        global_controls = ttk.LabelFrame(available_frame_container, text="Điều khiển toàn cục", padding=5)
+        global_controls.pack(fill=tk.X, side=tk.BOTTOM, pady=(5, 0))
 
-        # Nút refresh
-        refresh_button = ttk.Button(left_frame, text="Làm Mới Danh Sách", command=self.refresh_notebook_list)
-        refresh_button.grid(row=2, column=0, sticky="we", pady=(5, 0))
+        ttk.Button(global_controls, text="Làm Mới Danh Sách", command=self.refresh_notebook_list).pack(fill=tk.X, pady=(0, 5))
+        ttk.Button(global_controls, text="Dừng Tất Cả", command=self.stop_all_notebooks).pack(fill=tk.X)
 
-        # Panel phải trên - Điều khiển
-        control_frame = ttk.LabelFrame(main_frame, text="Điều Khiển", padding="5")
-        control_frame.grid(row=0, column=1, sticky="we", pady=(0, 5))
+        # --- 3. Khu vực Sections (động) ---
+        self.sections_container = ttk.Frame(main_frame)
+        self.sections_container.pack(side=tk.LEFT, fill=tk.Y)
 
-        # Auto-run controls
-        auto_run_frame = ttk.Frame(control_frame)
-        auto_run_frame.grid(row=0, column=0, sticky="we")
-        auto_run_frame.columnconfigure(2, weight=1)
+        self.add_section_button = ttk.Button(self.sections_container, text="+", command=self._add_section, width=3)
+        self.add_section_button.pack(side=tk.LEFT, fill=tk.Y)
 
-        self.auto_run_var = tk.BooleanVar()
-        auto_run_checkbox = ttk.Checkbutton(auto_run_frame, text="Tự động chạy", variable=self.auto_run_var, command=self.toggle_auto_run)
-        auto_run_checkbox.grid(row=0, column=0, sticky=tk.W)
+    def _add_section(self):
+        """Tạo một cột section mới, pack nó vào trước nút Add và mở rộng cửa sổ."""
+        section_id = self.next_section_id
+        self.next_section_id += 1
 
-        ttk.Label(auto_run_frame, text="Mỗi").grid(row=0, column=1, padx=(10, 5))
+        section_name = f"Section {section_id + 1}"
 
-        self.interval_var = tk.StringVar(value="60")
-        interval_spinbox = ttk.Spinbox(auto_run_frame, from_=10, to=3600, textvariable=self.interval_var, width=10)
-        interval_spinbox.grid(row=0, column=2, padx=(0, 5))
+        # Tạm thời gỡ nút add ra
+        self.add_section_button.pack_forget()
 
-        ttk.Label(auto_run_frame, text="giây").grid(row=0, column=3)
+        section_frame = ttk.LabelFrame(self.sections_container, text=section_name, padding=5)
+        section_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 5))
 
-        # Status frame
-        status_frame = ttk.Frame(control_frame)
-        status_frame.grid(row=1, column=0, sticky="we", pady=(5, 0))
-        status_frame.columnconfigure(1, weight=1)
+        section_frame.grid_rowconfigure(1, weight=1)
+        section_frame.grid_columnconfigure(0, weight=1)
 
-        ttk.Label(status_frame, text="Trạng thái:").grid(row=0, column=0, sticky=tk.W)
-        self.status_label = ttk.Label(status_frame, text="Sẵn sàng", foreground="green")
-        self.status_label.grid(row=0, column=1, sticky=tk.W, padx=(5, 0))
+        header_frame = ttk.Frame(section_frame)
+        header_frame.grid(row=0, column=0, sticky="ew")
+        header_frame.columnconfigure(0, weight=1)
+        title_label = ttk.Label(header_frame, text=section_name, font=("Segoe UI", 10, "bold"))
+        title_label.grid(row=0, column=0, sticky="w")
+        title_label.bind("<Double-1>", lambda e, sid=section_id: self._rename_section(sid))
+        ttk.Button(header_frame, text="X", width=2, command=lambda sid=section_id: self._close_section(sid)).grid(
+            row=0, column=1, sticky="e"
+        )
 
-        # Panel phải dưới - Console output
-        output_frame = ttk.LabelFrame(main_frame, text="Console Output", padding="5")
-        output_frame.grid(row=1, column=1, sticky="nswe")
-        output_frame.columnconfigure(0, weight=1)
-        output_frame.rowconfigure(0, weight=1)
+        canvas = tk.Canvas(section_frame, borderwidth=0, background="#ffffff", highlightthickness=0, width=280)
+        cards_frame = ttk.Frame(canvas, style="CanvasFrame.TFrame")
+        scrollbar = ttk.Scrollbar(section_frame, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.grid(row=1, column=1, sticky="ns")
+        canvas.grid(row=1, column=0, sticky="nsew")
+        canvas_window = canvas.create_window((0, 0), window=cards_frame, anchor="nw")
+        cards_frame.bind("<Configure>", lambda e, c=canvas: c.configure(scrollregion=c.bbox("all")))
+        canvas.bind("<Configure>", lambda e, c=canvas, cw=canvas_window: c.itemconfig(cw, width=e.width))
 
-        self.output_console = scrolledtext.ScrolledText(output_frame, wrap=tk.WORD, height=20)
-        self.output_console.grid(row=0, column=0, sticky="nswe")
+        buttons_frame = ttk.Frame(section_frame)
+        buttons_frame.grid(row=2, column=0, sticky="ew", pady=(5, 0))
+        buttons_frame.columnconfigure((0, 1), weight=1)
+        ttk.Button(buttons_frame, text="<< Thêm", command=lambda sid=section_id: self._move_to_section(sid)).grid(
+            row=0, column=0, columnspan=2, sticky="ew", pady=(0, 5)
+        )
+        ttk.Button(buttons_frame, text="Chạy Chọn", command=lambda sid=section_id: self._run_highlighted_in_section(sid)).grid(
+            row=1, column=0, sticky="ew", padx=(0, 2)
+        )
+        ttk.Button(buttons_frame, text="Chạy Section", command=lambda sid=section_id: self._run_section(sid)).grid(
+            row=1, column=1, sticky="ew", padx=(2, 0)
+        )
+        ttk.Button(buttons_frame, text="Bỏ chọn >>", command=lambda sid=section_id: self._move_from_section(sid)).grid(
+            row=2, column=0, columnspan=2, sticky="ew", pady=(5, 0)
+        )
 
-        # Console control buttons
-        console_buttons_frame = ttk.Frame(output_frame)
-        console_buttons_frame.grid(row=1, column=0, sticky="we", pady=(5, 0))
+        self.sections[section_id] = {
+            "name": section_name,
+            "frame": section_frame,
+            "title_label": title_label,
+            "canvas": canvas,
+            "cards_frame": cards_frame,
+            "notebook_cards": {},
+            "highlighted": set(),
+        }
 
-        clear_button = ttk.Button(console_buttons_frame, text="Xóa Console", command=self.clear_console)
-        clear_button.grid(row=0, column=0, sticky=tk.W)
+        # Pack lại nút Add ở cuối
+        self.add_section_button.pack(side=tk.LEFT, fill=tk.Y)
+        # Cập nhật kích thước cửa sổ
+        self._update_window_size()
 
-        save_log_button = ttk.Button(console_buttons_frame, text="Lưu Log", command=self.save_log)
-        save_log_button.grid(row=0, column=1, sticky=tk.W, padx=(5, 0))
+    def _close_section(self, section_id):
+        """Xóa một cột section và thu hẹp cửa sổ."""
+        if messagebox.askyesno("Xác nhận Xóa", f"Bạn có chắc muốn xóa '{self.sections[section_id]['name']}'?"):
+            section = self.sections[section_id]
+            for path in list(section["notebook_cards"].keys()):
+                self._create_card_in_list(
+                    path,
+                    self.available_cards_frame,
+                    self.available_notebook_cards,
+                    self.highlighted_available,
+                    self._on_card_click_available,
+                )
+            section["frame"].destroy()
+            del self.sections[section_id]
+            self.available_canvas.configure(scrollregion=self.available_canvas.bbox("all"))
+            # Cập nhật kích thước cửa sổ
+            self._update_window_size()
 
-        # Panel cuối - Thông tin
-        info_frame = ttk.LabelFrame(main_frame, text="Thông Tin", padding="5")
-        info_frame.grid(row=2, column=1, sticky="we", pady=(5, 0))
+    def _rename_section(self, section_id):
+        """Cho phép người dùng đổi tên section."""
+        current_name = self.sections[section_id]["name"]
+        new_name = simpledialog.askstring("Đổi tên Section", "Nhập tên mới:", initialvalue=current_name, parent=self.root)
+        if new_name and new_name.strip():
+            self.sections[section_id]["name"] = new_name
+            self.sections[section_id]["frame"].config(text=new_name)
+            self.sections[section_id]["title_label"].config(text=new_name)
 
-        info_text = f"Đường dẫn cơ sở: {self.base_path}\n"
-        info_text += f"Thư mục modules: {self.modules_path}\n"
-        info_text += f"Thư mục notebooks: {self.notebooks_path}"
+    def _on_card_click_available(self, event, path):
+        self._toggle_highlight(event, path, self.available_notebook_cards, self.highlighted_available)
 
-        info_label = ttk.Label(info_frame, text=info_text, font=("Consolas", 8))
-        info_label.grid(row=0, column=0, sticky=tk.W)
+    def _on_card_click_in_section(self, event, path, section_id):
+        section = self.sections[section_id]
+        self._toggle_highlight(event, path, section["notebook_cards"], section["highlighted"])
+
+    def _toggle_highlight(self, event, path, card_list, selection_set):
+        is_ctrl_pressed = (event.state & 4) != 0
+        is_highlighted = path in selection_set
+
+        if not is_ctrl_pressed:
+            current_selection = list(selection_set)
+            for p in current_selection:
+                self._unhighlight_card(p, card_list, selection_set)
+            if not is_highlighted or len(current_selection) > 1:
+                self._highlight_card(path, card_list, selection_set)
+        else:
+            if is_highlighted:
+                self._unhighlight_card(path, card_list, selection_set)
+            else:
+                self._highlight_card(path, card_list, selection_set)
+
+    def _highlight_card(self, path, card_list, selection_set):
+        card_info = card_list.get(path)
+        if card_info and not card_info.get("highlighted"):
+            card_info["highlighted"] = True
+            selection_set.add(path)
+            card_info["frame"].config(style="Selected.TFrame")
+            for widget in card_info["frame"].winfo_children():
+                widget.config(background=style.lookup("Selected.TFrame", "background"))
+
+    def _unhighlight_card(self, path, card_list, selection_set):
+        card_info = card_list.get(path)
+        if card_info and card_info.get("highlighted"):
+            card_info["highlighted"] = False
+            selection_set.discard(path)
+            card_info["frame"].config(style="Card.TFrame")
+            for widget in card_info["frame"].winfo_children():
+                widget.config(background=style.lookup("Card.TFrame", "background"))
 
     def refresh_notebook_list(self):
-        """Làm mới danh sách notebooks"""
-        self.notebook_listbox.delete(0, tk.END)
-
-        if not os.path.exists(self.notebooks_path):
-            self.log_message(f"Thư mục notebooks không tồn tại: {self.notebooks_path}")
-            return
+        for widget in self.available_cards_frame.winfo_children():
+            widget.destroy()
+        self.available_notebook_cards.clear()
+        self.highlighted_available.clear()
+        paths_in_sections = {path for sec in self.sections.values() for path in sec["notebook_cards"]}
 
         try:
-            files = [f for f in os.listdir(self.notebooks_path) if f.endswith(".ipynb")]
-            files.sort()
+            if not os.path.exists(self.notebooks_path):
+                raise FileNotFoundError
+            notebook_files = sorted([f for f in os.listdir(self.notebooks_path) if f.endswith(".ipynb")])
+            available_files = [fn for fn in notebook_files if os.path.join(self.notebooks_path, fn) not in paths_in_sections]
 
-            for file in files:
-                self.notebook_listbox.insert(tk.END, file)
+            if not available_files:
+                ttk.Label(self.available_cards_frame, text="Tất cả notebooks\nđã được chọn.", justify=tk.CENTER).pack(pady=20)
+                return
 
-            self.log_message(f"Đã tải {len(files)} notebook(s)")
+            for filename in available_files:
+                path = os.path.join(self.notebooks_path, filename)
+                self._create_card_in_list(
+                    path,
+                    self.available_cards_frame,
+                    self.available_notebook_cards,
+                    self.highlighted_available,
+                    self._on_card_click_available,
+                )
         except Exception as e:
-            self.log_message(f"Lỗi khi đọc thư mục notebooks: {str(e)}")
+            ttk.Label(self.available_cards_frame, text=f"Lỗi: {e}", wraplength=250).pack()
 
-    def get_selected_notebooks(self):
-        """Lấy danh sách notebooks đã được chọn"""
-        selected_indices = self.notebook_listbox.curselection()
-        return [self.notebook_listbox.get(i) for i in selected_indices]
+        self.available_cards_frame.update_idletasks()
+        self.available_canvas.config(scrollregion=self.available_canvas.bbox("all"))
 
-    def get_all_notebooks(self):
-        """Lấy tất cả notebooks"""
-        return [self.notebook_listbox.get(i) for i in range(self.notebook_listbox.size())]
+    def _create_card_in_list(self, path, parent_frame, card_list, selection_set, on_click_handler):
+        filename = os.path.basename(path)
+        card_frame = ttk.Frame(parent_frame, style="Card.TFrame", padding=5)
+        card_frame.pack(fill="x", pady=2, padx=2)
+        description = self.get_notebook_description(path)
+        lbl_filename = ttk.Label(card_frame, text=filename, font=("Segoe UI", 10, "bold"), background="white")
+        lbl_filename.pack(anchor="w", fill="x")
+        lbl_desc = ttk.Label(card_frame, text=description, font=("Segoe UI", 9), justify=tk.LEFT, background="white")
+        lbl_desc.pack(anchor="w", fill="x", pady=(2, 0))
+        card_list[path] = {"frame": card_frame, "highlighted": False}
+        card_frame.bind("<Button-1>", lambda e, p=path: on_click_handler(e, p))
+        lbl_filename.bind("<Button-1>", lambda e, p=path: on_click_handler(e, p))
+        lbl_desc.bind("<Button-1>", lambda e, p=path: on_click_handler(e, p))
 
-    def run_selected_notebooks(self):
-        """Chạy các notebooks đã được chọn"""
-        selected = self.get_selected_notebooks()
-        if not selected:
-            messagebox.showwarning("Chọn Notebook", "Vui lòng chọn ít nhất một notebook để chạy.")
+    def get_notebook_description(self, path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                notebook = nbformat.read(f, as_version=4)
+            for cell in notebook.cells:
+                if cell.cell_type == "markdown":
+                    source = "".join(cell.source)
+                    for line in source.split("\n"):
+                        if line.strip().startswith("# "):
+                            return line.strip()[2:].strip()
+            return "Không có mô tả"
+        except Exception:
+            return "Không thể đọc mô tả."
+
+    def _move_to_section(self, section_id):
+        if not self.highlighted_available:
             return
+        section = self.sections[section_id]
+        for path in list(self.highlighted_available):
+            card_info = self.available_notebook_cards.pop(path)
+            card_info["frame"].destroy()
+            self._create_card_in_list(
+                path,
+                section["cards_frame"],
+                section["notebook_cards"],
+                section["highlighted"],
+                lambda e, p=path, sid=section_id: self._on_card_click_in_section(e, p, sid),
+            )
+        self.highlighted_available.clear()
+        self.available_canvas.configure(scrollregion=self.available_canvas.bbox("all"))
+        section["canvas"].configure(scrollregion=section["canvas"].bbox("all"))
 
-        for notebook in selected:
-            self.run_notebook(notebook)
-
-    def run_all_notebooks(self):
-        """Chạy tất cả notebooks"""
-        notebooks = self.get_all_notebooks()
-        if not notebooks:
-            messagebox.showwarning("Không có Notebook", "Không có notebook nào để chạy.")
+    def _move_from_section(self, section_id):
+        section = self.sections[section_id]
+        if not section["highlighted"]:
             return
+        for path in list(section["highlighted"]):
+            card_info = section["notebook_cards"].pop(path)
+            card_info["frame"].destroy()
+            self._create_card_in_list(
+                path, self.available_cards_frame, self.available_notebook_cards, self.highlighted_available, self._on_card_click_available
+            )
+        section["highlighted"].clear()
+        self.available_canvas.configure(scrollregion=self.available_canvas.bbox("all"))
+        section["canvas"].configure(scrollregion=section["canvas"].bbox("all"))
 
-        for notebook in notebooks:
-            self.run_notebook(notebook)
-
-    def run_notebook(self, notebook_name):
-        """Chạy một notebook trong thread riêng biệt"""
-        if notebook_name in self.running_threads:
-            self.log_message(f"[{notebook_name}] Đã đang chạy, bỏ qua...")
+    def _run_highlighted_in_section(self, section_id):
+        section = self.sections[section_id]
+        paths_to_run = list(section["highlighted"])
+        if not paths_to_run:
             return
+        self.log_message(f"--- Chạy mục đã chọn trong '{section['name']}' ---")
+        for path in paths_to_run:
+            self.run_notebook(path)
 
-        # Tạo thread mới để chạy notebook
-        thread = threading.Thread(target=self._run_notebook_thread, args=(notebook_name,))
+    def _run_section(self, section_id):
+        section = self.sections[section_id]
+        paths_to_run = list(section["notebook_cards"].keys())
+        if not paths_to_run:
+            return
+        self.log_message(f"--- Chạy tất cả trong '{section['name']}' ---")
+        for path in paths_to_run:
+            self.run_notebook(path)
+
+    def run_notebook(self, notebook_path):
+        notebook_name = os.path.basename(notebook_path)
+        if notebook_path in self.running_threads:
+            self.log_message(f"[{notebook_name}] Đang chạy, bỏ qua.")
+            return
+        thread = threading.Thread(target=self._run_notebook_thread, args=(notebook_path,))
         thread.daemon = True
-        self.running_threads[notebook_name] = thread
+        self.running_threads[notebook_path] = thread
         thread.start()
 
-        self.update_status()
-
-    def _run_notebook_thread(self, notebook_name):
-        """Chạy notebook trong thread (method private)"""
-        notebook_path = os.path.join(self.notebooks_path, notebook_name)
-
+    def _run_notebook_thread(self, notebook_path):
+        notebook_name = os.path.basename(notebook_path)
         try:
-            self.output_queue.put(f"[{notebook_name}] Bắt đầu chạy...")
-            self.output_queue.put(f"[{notebook_name}] Đường dẫn: {notebook_path}")
-
-            # Kiểm tra file tồn tại
-            if not os.path.exists(notebook_path):
-                raise FileNotFoundError(f"Notebook file không tồn tại: {notebook_path}")  # Đọc notebook
+            self.output_queue.put(f"[{notebook_name}] Bắt đầu...")
             with open(notebook_path, "r", encoding="utf-8") as f:
                 notebook = nbformat.read(f, as_version=4)
-
-            # Chuyển đổi notebook thành Python code bằng cách tự xử lý
             python_code = self.convert_notebook_to_python(notebook)
-
-            self.output_queue.put(f"[{notebook_name}] Đã chuyển đổi thành Python code")
-
-            # Đảm bảo modules có thể được import
-            if self.modules_path not in sys.path:
-                sys.path.insert(0, self.modules_path)
-
-            # Tạo namespace riêng cho notebook
-            notebook_globals = {
-                "__name__": f"notebook_{notebook_name}",
-                "__file__": notebook_path,
-                "__builtins__": __builtins__,
-            }
-
-            # Chuyển hướng stdout và stderr
-            old_stdout = sys.stdout
-            old_stderr = sys.stderr
-
+            notebook_globals = {"__name__": f"nb_{notebook_name}", "__file__": notebook_path}
+            old_stdout, old_stderr = sys.stdout, sys.stderr
             captured_output = io.StringIO()
-
             try:
-                sys.stdout = captured_output
-                sys.stderr = captured_output
-
-                # Thực thi code
+                sys.stdout = sys.stderr = captured_output
                 exec(python_code, notebook_globals)
-
-                # Lấy output
                 output = captured_output.getvalue()
                 if output.strip():
                     self.output_queue.put(f"[{notebook_name}] Output:\n{output}")
-
-                self.output_queue.put(f"[{notebook_name}] Hoàn thành thành công!")
-
+                self.output_queue.put(f"[{notebook_name}] Hoàn thành!")
             except Exception as e:
-                error_msg = f"[{notebook_name}] Lỗi: {str(e)}\n{traceback.format_exc()}"
-                self.output_queue.put(error_msg)
-
+                self.output_queue.put(f"[{notebook_name}] Lỗi: {e}\n{traceback.format_exc()}")
             finally:
-                sys.stdout = old_stdout
-                sys.stderr = old_stderr
-
+                sys.stdout, sys.stderr = old_stdout, old_stderr
         except Exception as e:
-            error_msg = f"[{notebook_name}] Lỗi khi đọc/chuyển đổi notebook: {str(e)}"
-            self.output_queue.put(error_msg)
-
+            self.output_queue.put(f"[{notebook_name}] Lỗi đọc file: {e}")
         finally:
-            # Xóa thread khỏi danh sách đang chạy
-            if notebook_name in self.running_threads:
-                del self.running_threads[notebook_name]
-
-            # Cập nhật trạng thái
-            self.root.after(0, self.update_status)
+            if notebook_path in self.running_threads:
+                del self.running_threads[notebook_path]
 
     def stop_all_notebooks(self):
-        """Dừng tất cả notebooks đang chạy"""
         if not self.running_threads:
             self.log_message("Không có notebook nào đang chạy.")
             return
-
-        # Ghi log các notebook bị dừng
-        for notebook_name in list(self.running_threads.keys()):
-            self.log_message(f"[{notebook_name}] Đã được yêu cầu dừng...")
-
-        # Xóa tất cả threads (threads sẽ tự kết thúc)
+        self.log_message(f"Gửi yêu cầu dừng {len(self.running_threads)} notebooks...")
         self.running_threads.clear()
-        self.update_status()
-
         messagebox.showinfo("Dừng Notebooks", "Đã gửi yêu cầu dừng tất cả notebooks.")
 
-    def toggle_auto_run(self):
-        """Bật/tắt chế độ tự động chạy"""
-        self.auto_run_enabled = self.auto_run_var.get()
-
-        if self.auto_run_enabled:
-            try:
-                self.auto_run_interval = int(self.interval_var.get())
-                if self.auto_run_interval < 10:
-                    self.auto_run_interval = 10
-                    self.interval_var.set("10")
-            except ValueError:
-                self.auto_run_interval = 60
-                self.interval_var.set("60")
-
-            self.log_message(f"Đã bật tự động chạy mỗi {self.auto_run_interval} giây")
-            self.schedule_auto_run()
-        else:
-            self.log_message("Đã tắt tự động chạy")
-            if self.auto_run_timer:
-                self.root.after_cancel(self.auto_run_timer)
-                self.auto_run_timer = None
-
-    def schedule_auto_run(self):
-        """Lên lịch chạy tự động"""
-        if self.auto_run_enabled:
-            self.auto_run_timer = self.root.after(self.auto_run_interval * 1000, self.auto_run_execute)
-
-    def auto_run_execute(self):
-        """Thực thi auto-run"""
-        if self.auto_run_enabled:
-            self.log_message("=== Tự động chạy notebooks ===")
-            self.run_all_notebooks()
-            self.schedule_auto_run()
-
     def log_message(self, message):
-        """Ghi message vào console"""
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        formatted_message = f"[{timestamp}] {message}\n"
-        self.output_queue.put(formatted_message)
+        timestamp = time.strftime("%H:%M:%S")
+        self.output_queue.put(f"[{timestamp}] {message}\n")
 
     def check_output_queue(self):
-        """Kiểm tra queue và cập nhật console"""
         try:
             while True:
-                message = self.output_queue.get_nowait()
-                self.output_console.insert(tk.END, message)
-                self.output_console.see(tk.END)
+                self.output_console.insert(tk.END, self.output_queue.get_nowait())
         except queue.Empty:
             pass
-
-        # Lên lịch kiểm tra lại sau 100ms
+        self.output_console.see(tk.END)
         self.root.after(100, self.check_output_queue)
 
-    def update_status(self):
-        """Cập nhật trạng thái hiển thị"""
-        running_count = len(self.running_threads)
-        if running_count > 0:
-            self.status_label.config(text=f"Đang chạy {running_count} notebook(s)", foreground="orange")
-        else:
-            self.status_label.config(text="Sẵn sàng", foreground="green")
-
     def clear_console(self):
-        """Xóa console"""
         self.output_console.delete(1.0, tk.END)
-        self.log_message("Console đã được xóa.")
-
-    def save_log(self):
-        """Lưu log ra file"""
-        try:
-            file_path = filedialog.asksaveasfilename(
-                defaultextension=".txt", filetypes=[("Text files", "*.txt"), ("All files", "*.*")], title="Lưu Log File"
-            )
-
-            if file_path:
-                content = self.output_console.get(1.0, tk.END)
-                with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(content)
-                self.log_message(f"Đã lưu log vào: {file_path}")
-        except Exception as e:
-            messagebox.showerror("Lỗi", f"Không thể lưu log: {str(e)}")
 
     def on_closing(self):
-        """Xử lý khi đóng ứng dụng"""
-        if self.running_threads:
-            if messagebox.askokcancel("Thoát", "Có notebook đang chạy. Bạn có chắc muốn thoát?"):
-                self.stop_all_notebooks()
-                self.root.destroy()
-        else:
+        if self.running_threads and messagebox.askokcancel("Thoát", "Notebook đang chạy, bạn chắc chắn muốn thoát?"):
+            self.root.destroy()
+        elif not self.running_threads:
             self.root.destroy()
 
     def convert_notebook_to_python(self, notebook):
-        """
-        Chuyển đổi notebook thành Python code mà không cần PythonExporter
-        """
-        python_lines = []
-
+        lines = []
         for cell in notebook.cells:
             if cell.cell_type == "code":
-                # Thêm separator comment
-                python_lines.append(f"\n# %%\n# Cell: {cell.get('id', 'unknown')}\n")
-
-                # Thêm source code của cell
-                source = cell.source
-                if isinstance(source, list):
-                    source = "".join(source)
-
-                python_lines.append(source)
-                python_lines.append("\n")
-
-        return "\n".join(python_lines)
+                lines.append("".join(cell.source))
+        return "\n\n".join(lines)
 
 
 def main():
-    """Hàm main"""
     root = tk.Tk()
-    # Thiết lập icon nếu có
-    icon_path = os.path.join(os.path.dirname(__file__), "logo.ico")
-    if os.path.exists(icon_path):
-        try:
-            root.iconbitmap(icon_path)
-        except Exception:
-            pass  # Bỏ qua nếu không load được icon
-
     NotebookRunner(root)
     root.mainloop()
 
