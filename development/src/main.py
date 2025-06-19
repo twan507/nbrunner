@@ -352,7 +352,11 @@ class NotebookRunner(QMainWindow):
         new_width = current_width + config.SECTION_DISPLAY_WIDTH
         self.resize(new_width, self.height())
 
+        # Cập nhật minimum size trước khi thay đổi kích thước window
+        self._update_window_minimum_size()
+
         self.log_message(f"Đã tạo section mới: {section_name}")
+
 
     def add_notebooks_to_section(self, section_widget):
         """Thêm notebooks đã chọn từ danh sách tổng vào section"""
