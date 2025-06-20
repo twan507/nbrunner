@@ -49,7 +49,9 @@ class NotebookRunner(QMainWindow):
         self.queue_timer = QTimer(self)
         self.queue_timer.timeout.connect(self.check_output_queue)
         self.queue_timer.start(100)
-        self._update_window_size(initial=True)
+        # CHANGED: Loại bỏ việc đặt kích thước cửa sổ ban đầu một cách thủ công.
+        # Thay vào đó, chỉ cập nhật kích thước tối thiểu.
+        self._update_window_minimum_size()
 
     def set_window_icon(self):
         functions.setup_window_icon(self)
@@ -59,16 +61,13 @@ class NotebookRunner(QMainWindow):
         min_height = config.WINDOW_MIN_HEIGHT
         if hasattr(self, "sections"):
             min_width += len(self.sections) * config.SECTION_MIN_WIDTH
-        return min_width, min_height
+        return (min_width + 50), min_height
 
     def _update_window_minimum_size(self):
         min_width, min_height = self._calculate_minimum_window_size()
         self.setMinimumSize(min_width, min_height)
 
-    def _update_window_size(self, initial=False):
-        if initial:
-            self.resize(config.WINDOW_INITIAL_WIDTH, config.WINDOW_INITIAL_HEIGHT)
-            self._update_window_minimum_size()
+    # REMOVED: Hàm _update_window_size không còn cần thiết.
 
     def setup_ui(self):
         main_widget = QWidget()
@@ -90,7 +89,7 @@ class NotebookRunner(QMainWindow):
         self.output_console.setReadOnly(True)
         self.output_console.setFont(QFont("JetBrains Mono", 9))
         self.output_console.setObjectName("Console")
-        clear_log_button = QPushButton("🗑️ Xóa Console")
+        clear_log_button = QPushButton("Xóa Console")
         clear_log_button.setObjectName("ClearButton")
         clear_log_button.clicked.connect(self.clear_console)
         log_layout.addWidget(self.output_console)
@@ -102,7 +101,7 @@ class NotebookRunner(QMainWindow):
         available_container_layout = QVBoxLayout(self.available_container)
         available_container_layout.setContentsMargins(0, 0, 0, 0)
         available_container_layout.setSpacing(10)
-        available_group = QGroupBox("📚 Kéo Notebook từ đây") # CHANGED: Cập nhật tiêu đề
+        available_group = QGroupBox("📚 Danh sách Notebooks") 
         available_group.setObjectName("AvailableGroup")
         available_layout = QVBoxLayout(available_group)
         available_layout.setContentsMargins(12, 20, 12, 12)
@@ -123,11 +122,14 @@ class NotebookRunner(QMainWindow):
         controls_layout = QVBoxLayout(controls_group)
         controls_layout.setContentsMargins(12, 20, 12, 12)
         controls_layout.setSpacing(8)
-        refresh_button = QPushButton("🔄 Làm Mới Danh Sách")
+        refresh_button = QPushButton("Làm Mới Danh Sách")
         refresh_button.setObjectName("RefreshButton")
         refresh_button.clicked.connect(self.refresh_notebook_list)
-        add_section_button = QPushButton("➕ Thêm Section Mới (để thả vào)") # CHANGED: Cập nhật tiêu đề
-        add_section_button.setObjectName("RefreshButton")
+        add_section_button = QPushButton("Thêm Section Mới")
+        
+        # FIX: Đặt một objectName riêng cho nút này
+        add_section_button.setObjectName("AddSectionButton")
+
         add_section_button.clicked.connect(self.create_new_section)
         controls_layout.addWidget(refresh_button)
         controls_layout.addWidget(add_section_button)
@@ -150,7 +152,6 @@ class NotebookRunner(QMainWindow):
 
     def _create_card_in_list(self, path, parent_layout, card_dict):
         description = functions.get_notebook_description(path)
-        # CHANGED: Truyền self (NotebookRunner instance) vào constructor của NotebookCard
         card = NotebookCard(path, description, self)
         card.clicked.connect(self._on_card_click)
         parent_layout.addWidget(card)
@@ -195,7 +196,6 @@ class NotebookRunner(QMainWindow):
 
         section_widget = SectionWidget(section_name, section_id, self)
         
-        # CHANGED: Kết nối signal mới cho việc drop, bỏ signal cũ
         section_widget.notebooks_dropped.connect(self.move_notebooks_to_section)
         section_widget.notebook_remove_requested.connect(self.remove_notebooks_from_section)
         section_widget.section_close_requested.connect(self.close_section)
@@ -203,32 +203,26 @@ class NotebookRunner(QMainWindow):
         self.main_splitter.addWidget(section_widget)
         self.sections[section_id] = section_widget
 
-        current_width = self.width()
-        new_width = current_width + config.SECTION_DISPLAY_WIDTH
-        self.resize(new_width, self.height())
+        # REMOVED: Xóa bỏ logic tự động thay đổi kích thước cửa sổ.
+        # Layout sẽ tự xử lý việc này.
         self._update_window_minimum_size()
         self.log_message(f"Đã tạo section mới: {section_name}")
 
-    # CHANGED: Đổi tên từ add_notebooks_to_section và sửa lại để nhận tham số từ drop event
     def move_notebooks_to_section(self, section_widget, paths_to_move):
         """Di chuyển notebooks từ danh sách có sẵn vào một section."""
         moved_count = 0
         for path in paths_to_move:
-            # Kiểm tra xem path có hợp lệ và tồn tại trong danh sách có sẵn không
             if path in self.available_notebook_cards:
                 old_card = self.available_notebook_cards[path]
                 description = old_card.desc_label.text()
                 
-                # Xóa card khỏi layout và dictionary
                 self.available_cards_layout.removeWidget(old_card)
                 old_card.deleteLater()
                 del self.available_notebook_cards[path]
                 
-                # Thêm notebook card mới vào section
                 section_widget.add_notebook_card(path, description)
                 moved_count += 1
 
-        # Xóa các lựa chọn highlight sau khi di chuyển
         self.highlighted_available.clear()
         
         if moved_count > 0:
@@ -248,13 +242,8 @@ class NotebookRunner(QMainWindow):
         if section_widget.notebook_cards:
             self.remove_notebooks_from_section(section_widget, list(section_widget.notebook_cards.keys()))
 
-        current_sizes = self.main_splitter.sizes()
-        section_width = 0
-        for i in range(self.main_splitter.count()):
-            if self.main_splitter.widget(i) == section_widget:
-                if i < len(current_sizes):
-                    section_width = current_sizes[i]
-                break
+        # REMOVED: Xóa bỏ logic tự động thay đổi kích thước cửa sổ.
+        # Layout sẽ tự xử lý việc này.
 
         section_widget.cleanup()
         section_widget.setParent(None)
@@ -262,7 +251,6 @@ class NotebookRunner(QMainWindow):
         if section_id in self.sections:
             del self.sections[section_id]
 
-        self.resize(self.width() - section_width, self.height())
         self._update_window_minimum_size()
         self.log_message(f"Đã đóng section: {section_widget.section_name}")
 
@@ -277,7 +265,7 @@ if __name__ == "__main__":
             screen_geometry = screen.availableGeometry()
             window_geometry = window.frameGeometry()
             window_geometry.moveCenter(screen_geometry.center())
-            final_x = window_geometry.topLeft().x() - 500
+            final_x = window_geometry.topLeft().x() - 300
             final_y = window_geometry.topLeft().y() - 50
             window.move(final_x, final_y)
     except Exception as e:
