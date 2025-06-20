@@ -18,14 +18,16 @@ def get_stylesheet():
             border: 2px solid #e9ecef;
             border-radius: 12px;
             margin-top: 12px;
-            padding: 8px;
+            /* MODIFIED: Giảm padding mặc định của groupbox */
+            padding: 2px;
             background-color: #ffffff;
         }
         QGroupBox::title {
             subcontrol-origin: margin;
             subcontrol-position: top left;
-            padding: 0 8px;
-            left: 15px;
+            /* MODIFIED: Giảm padding và vị trí của title */
+            padding: 0 2px;
+            left: 10px;
             color: #495057;
             background-color: #ffffff;
         }
@@ -47,7 +49,8 @@ def get_stylesheet():
             color: #d4d4d4;
             border: 1px solid #495057;
             border-radius: 8px;
-            padding: 8px;
+            /* MODIFIED: Giảm padding của console */
+            padding: 5px;
             font-family: "JetBrains Mono", "Consolas", monospace;
         }
         QTextEdit { 
@@ -55,7 +58,8 @@ def get_stylesheet():
             border: 2px solid #dee2e6; 
             border-radius: 8px; 
             color: #2c3e50; 
-            padding: 8px; 
+            /* MODIFIED: Giảm padding của textedit */
+            padding: 5px; 
         }
         QComboBox {
             background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px;
@@ -98,7 +102,9 @@ def get_stylesheet():
         }
         #SectionCard { 
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa); 
-            border: 1px solid #dee2e6; border-radius: 8px; margin: 5px; padding: 8px; 
+            border: 1px solid #dee2e6; border-radius: 8px; margin: 5px; 
+            /* MODIFIED: Giảm padding của card trong section */
+            padding: 6px; 
         }
         QLabel, #CardLabel { background-color: transparent; border: none; color: #2c3e50; }
 
@@ -118,7 +124,8 @@ def get_stylesheet():
             font-weight: 500;
             color: #ffffff;
             border: none;
-            padding: 8px 12px;
+            /* MODIFIED: Giảm padding của button */
+            padding: 6px 10px;
             border-radius: 8px;
             min-height: 22px;
         }

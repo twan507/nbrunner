@@ -73,7 +73,7 @@ class NotebookCard(QFrame):
         self.setObjectName("Card")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(5)
         self.filename_label = QLabel(os.path.basename(path))
         self.filename_label.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
@@ -157,7 +157,7 @@ class SectionNotebookCard(QFrame):
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(5)
         title_label = QLabel(os.path.basename(self.path))
         title_label.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
@@ -365,7 +365,7 @@ class SectionWidget(QWidget):
 
         notebooks_group = QGroupBox(f"📋 {self.section_name}")
         notebooks_group_layout = QVBoxLayout(notebooks_group)
-        notebooks_group_layout.setContentsMargins(12, 20, 12, 12)
+        notebooks_group_layout.setContentsMargins(5, 10, 5, 5)
         notebooks_group_layout.setSpacing(8)
 
         self.scroll_area = QScrollArea()
@@ -382,7 +382,7 @@ class SectionWidget(QWidget):
 
         schedule_group = QGroupBox("⏰ Tác vụ hẹn giờ")
         schedule_main_layout = QVBoxLayout(schedule_group)
-        schedule_main_layout.setContentsMargins(12, 20, 12, 12)
+        schedule_main_layout.setContentsMargins(5, 10, 5, 5)
         schedule_main_layout.setSpacing(10)
 
         add_schedule_layout = QHBoxLayout()
@@ -431,7 +431,7 @@ class SectionWidget(QWidget):
         controls_group = QGroupBox("⚙️ Điều khiển chung")
         controls_group.setObjectName("SectionControlsGroup")
         controls_layout = QVBoxLayout(controls_group)
-        controls_layout.setContentsMargins(12, 20, 12, 12)
+        controls_layout.setContentsMargins(5, 10, 5, 5)
         controls_layout.setSpacing(8)
 
         run_buttons_layout = QHBoxLayout()
