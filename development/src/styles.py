@@ -51,7 +51,7 @@ def get_stylesheet():
             padding: 0 8px;
             left: 15px;
             color: #007bff;
-            background-color: #ffffff;
+            background-color: #f8fcff;
             font-weight: bold;
         }
         
@@ -97,9 +97,16 @@ def get_stylesheet():
         #RefreshButton:hover {
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1e7e34, stop:1 #155724);
         }
-        
-        #StopButton {
+          #StopButton {
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #dc3545, stop:1 #bd2130);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-weight: bold;
+            font-size: 9pt;
+            max-width: 70px;
+            max-height: 25px;
         }
         #StopButton:hover {
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #bd2130, stop:1 #a71e2a);
@@ -325,5 +332,179 @@ def get_stylesheet():
         #SectionsScrollArea QScrollBar::add-page:vertical,
         #SectionsScrollArea QScrollBar::sub-page:vertical {
             background: none;
+        }
+          /* === SECTION NOTEBOOK CARDS === */
+        #SectionCard {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            margin: 5px;
+            padding: 8px;
+        }
+        
+        #SectionConsole {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            border: 1px solid #4a5568;
+            border-radius: 6px;
+            font-family: "JetBrains Mono", "Consolas", monospace;
+            font-size: 8pt;
+            padding: 6px;
+        }
+          /* === RUN BUTTON === */
+        #RunButton {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #28a745, stop:1 #218838);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-weight: bold;
+            font-size: 9pt;
+            max-width: 70px;
+            max-height: 25px;
+        }
+        
+        #RunButton:hover {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #34ce57, stop:1 #28a745);
+        }
+        
+        #RunButton:pressed {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1e7e34, stop:1 #155724);
+        }
+        
+        #RunButton:disabled {
+            background: #6c757d;
+            color: #adb5bd;
+        }
+          /* === REMOVE BUTTON === */
+        #RemoveButton {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #dc3545, stop:1 #c82333);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-weight: bold;
+            font-size: 9pt;
+            max-width: 70px;
+            max-height: 25px;
+        }
+        
+        #RemoveButton:hover {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e4606d, stop:1 #dc3545);
+        }
+        
+        #RemoveButton:pressed {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #bd2130, stop:1 #a71e2a);
+        }
+          /* === CLEAR LOG BUTTON === */
+        #ClearLogButton {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6c757d, stop:1 #5a6268);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-weight: bold;
+            font-size: 9pt;
+            max-width: 70px;
+            max-height: 25px;
+        }
+        
+        #ClearLogButton:hover {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #7c858d, stop:1 #6c757d);
+        }
+        
+        /* === SECTION CONTROLS FRAME === */
+        #SectionControlsFrame {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f8f9fa, stop:1 #e9ecef);
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            margin: 5px 0px;
+            padding: 5px;
+        }
+        
+        /* === SECTION CONTROL BUTTONS === */
+        #SectionControlButton {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #17a2b8, stop:1 #138496);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-weight: 500;
+            font-size: 10pt;
+            min-height: 20px;
+        }
+        #SectionControlButton:hover {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1fc7e0, stop:1 #17a2b8);
+        }
+        #SectionControlButton:pressed {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #138496, stop:1 #0f6674);
+        }
+        
+        #SectionRunButton {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #28a745, stop:1 #1e7e34);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-weight: 500;
+            font-size: 10pt;
+            min-height: 20px;
+        }
+        #SectionRunButton:hover {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #34ce57, stop:1 #28a745);
+        }
+        #SectionRunButton:pressed {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1e7e34, stop:1 #155724);
+        }
+        
+        #SectionStopButton {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #fd7e14, stop:1 #e8590c);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-weight: 500;
+            font-size: 10pt;
+            min-height: 20px;
+        }
+        #SectionStopButton:hover {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #fd9441, stop:1 #fd7e14);
+        }
+        #SectionStopButton:pressed {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e8590c, stop:1 #d54309);
+        }
+        
+        #SectionClearButton {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6c757d, stop:1 #545b62);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-weight: 500;
+            font-size: 10pt;
+            min-height: 20px;
+        }
+        #SectionClearButton:hover {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #7c858d, stop:1 #6c757d);
+        }
+        #SectionClearButton:pressed {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #545b62, stop:1 #44494f);
+        }
+        
+        #SectionRemoveButton {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #dc3545, stop:1 #c82333);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-weight: 500;
+            font-size: 10pt;
+            min-height: 20px;
+        }
+        #SectionRemoveButton:hover {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e4606d, stop:1 #dc3545);
+        }
+        #SectionRemoveButton:pressed {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #c82333, stop:1 #a71e2a);
         }
     """

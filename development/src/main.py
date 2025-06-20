@@ -35,11 +35,10 @@ class NotebookRunner(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(config.APP_NAME)
-        # Không set minimum size ở đây, sẽ tính dựa trên các cột
-
-        # --- Cấu trúc dữ liệu ---
+        # Không set minimum size ở đây, sẽ tính dựa trên các cột        # --- Cấu trúc dữ liệu ---
         self.available_notebook_cards = {}
-        self.highlighted_available = set()  # --- Quản lý sections ---
+        self.highlighted_available = set()
+        # --- Quản lý sections ---
         self.sections = {}  # Dict chứa các SectionWidget
         self.section_counter = 0  # Counter để tạo ID unique cho section
         self.available_container = None  # Sẽ được gán trong setup_ui
@@ -147,9 +146,6 @@ class NotebookRunner(QMainWindow):
         self.available_scroll_area = QScrollArea()
         self.available_scroll_area.setWidgetResizable(True)
         self.available_scroll_area.setObjectName("AvailableScrollArea")
-        # Đặt minimum width để luôn có đủ chỗ cho scrollbar
-        self.available_scroll_area.setMinimumWidth(config.NOTEBOOK_LIST_MIN_WIDTH)
-
         self.available_cards_widget = QWidget()
         self.available_cards_widget.setObjectName("CardsContainer")
         self.available_cards_layout = QVBoxLayout(self.available_cards_widget)
@@ -178,7 +174,7 @@ class NotebookRunner(QMainWindow):
         available_container_layout.addWidget(available_group)
         available_container_layout.addWidget(controls_group)
 
-        self.available_container.setMinimumWidth(config.NOTEBOOK_LIST_MIN_WIDTH)  # Notebook list min width
+        self.available_container.setMinimumWidth(config.NOTEBOOK_LIST_MIN_WIDTH)
         self.main_splitter.addWidget(self.available_container)
 
         # Thiết lập tỷ lệ ban đầu cho splitter (console ẩn, chỉ có notebook list)
@@ -215,7 +211,6 @@ class NotebookRunner(QMainWindow):
             self.available_cards_layout,
             self.available_notebook_cards,
             self.highlighted_available,
-            
             self._create_card_in_list,
         )
 
@@ -223,18 +218,15 @@ class NotebookRunner(QMainWindow):
         """Chạy các notebooks đã được chọn trong danh sách có sẵn."""
         functions.run_selected_notebooks(self.highlighted_available, self.log_message, self.run_notebook)
 
-    
     def run_notebook(self, notebook_path):
         functions.run_notebook(notebook_path, self.running_threads, self.output_queue)
 
-    
     def stop_all_notebooks(self):
         functions.stop_all_notebooks(self.running_threads, self.log_message)
 
     def log_message(self, message):
         functions.log_message(message, self.output_queue)
 
-    
     def check_output_queue(self):
         functions.check_output_queue(self.output_queue, self.output_console)
 
@@ -281,7 +273,6 @@ class NotebookRunner(QMainWindow):
 
         self.log_message(f"Đã tạo section mới: {section_name}")
 
-
     def add_notebooks_to_section(self, section_widget):
         """Thêm notebooks đã chọn từ danh sách tổng vào section"""
         if not self.highlighted_available:
@@ -289,29 +280,51 @@ class NotebookRunner(QMainWindow):
             return
 
         paths_to_move = list(self.highlighted_available)
-        moved_count = functions.move_notebooks_to_section(
-            paths_to_move, self.available_notebook_cards, self.available_cards_layout, section_widget, self.highlighted_available
-        )
+        moved_count = 0
+
+        for path in paths_to_move:
+            if path in self.available_notebook_cards:
+                # Lấy description từ card cũ
+                old_card = self.available_notebook_cards[path]
+                description = old_card.desc_label.text()
+
+                # Xóa khỏi danh sách có sẵn
+                self.available_cards_layout.removeWidget(old_card)
+                old_card.deleteLater()
+                del self.available_notebook_cards[path]
+
+                # Thêm vào section với SectionNotebookCard
+                section_widget.add_notebook_card(path, description)
+                moved_count += 1
+
+        # Clear highlighted set
+        self.highlighted_available.clear()
 
         self.log_message(f"Đã di chuyển {moved_count} notebooks vào {section_widget.section_name}")
 
     def remove_notebooks_from_section(self, section_widget, paths):
         """Trả notebooks từ section về danh sách tổng"""
-        moved_count = functions.move_notebooks_from_section(
-            paths, section_widget, self.available_cards_layout, self.available_notebook_cards, self._create_card_in_list
-        )
+        moved_count = 0
+
+        for path in paths:
+            if path in section_widget.notebook_cards:
+                # Xóa khỏi section
+                section_widget.remove_notebook_card(path)
+                # Thêm lại vào danh sách có sẵn
+                self._create_card_in_list(path, self.available_cards_layout, self.available_notebook_cards)
+                moved_count += 1
 
         self.log_message(f"Đã trả {moved_count} notebooks từ {section_widget.section_name} về danh sách tổng")
 
     def close_section(self, section_widget):
         """Đóng một section"""
         section_id = section_widget.section_id
-        
+
         # Trả tất cả notebooks về danh sách tổng
         if section_widget.notebook_cards:
             paths_to_return = list(section_widget.notebook_cards.keys())
             self.remove_notebooks_from_section(section_widget, paths_to_return)
-        
+
         # Lưu kích thước hiện tại và tìm vị trí của section cần xóa
         current_sizes = self.main_splitter.sizes()
         section_index = -1
@@ -319,30 +332,31 @@ class NotebookRunner(QMainWindow):
             if self.main_splitter.widget(i) == section_widget:
                 section_index = i
                 break
-        
+
         # Lấy kích thước section sẽ bị xóa để điều chỉnh window
         section_width = 0
         if section_index >= 0 and section_index < len(current_sizes):
             section_width = current_sizes[section_index]
-          # Xóa section khỏi splitter trước
+        # Xóa section khỏi splitter trước
         section_widget.cleanup()
         # QSplitter không có removeWidget, cần dùng setParent(None) để xóa
         section_widget.setParent(None)
         section_widget.deleteLater()
-        
+
         if section_id in self.sections:
             del self.sections[section_id]
-        
+
         # Giảm kích thước window
         if section_width > 0:
             current_width = self.width()
             new_width = current_width - section_width
             self.resize(new_width, self.height())
-        
+
         # Cập nhật minimum size sau khi xóa section
         self._update_window_minimum_size()
-        
+
         self.log_message(f"Đã đóng section: {section_widget.section_name}")
+
 
 if __name__ == "__main__":
     # Khởi tạo ứng dụng
@@ -354,7 +368,7 @@ if __name__ == "__main__":
 
     # Tạo và hiển thị cửa sổ chính
     window = NotebookRunner()
-    
+
     # --- Căn giữa và di chuyển lệch cửa sổ khi khởi động ---
     try:
         screen = app.primaryScreen()

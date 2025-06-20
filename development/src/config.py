@@ -98,20 +98,23 @@ PYINSTALLER_EXTRA_ARGS = get_pyinstaller_args()
 
 # Kích thước cửa sổ
 WINDOW_MIN_HEIGHT = 800
-WINDOW_INITIAL_WIDTH = 800 
+WINDOW_INITIAL_WIDTH = 800
 WINDOW_INITIAL_HEIGHT = 800
 
 # Cột Console
 CONSOLE_MIN_WIDTH = 300
-CONSOLE_INITIAL_WIDTH = 400 
+CONSOLE_INITIAL_WIDTH = 400
 
 # Cột Notebook List
-NOTEBOOK_LIST_INITIAL_WIDTH = 400
-NOTEBOOK_LIST_MIN_WIDTH = 300  # Tăng lên để luôn có đủ chỗ cho scrollbar
+NOTEBOOK_LIST_INITIAL_WIDTH = 300
+NOTEBOOK_LIST_MIN_WIDTH = 250
 
 # Cột Section
-SECTION_MIN_WIDTH = 300  # Tăng lên để luôn có đủ chỗ cho scrollbar
-SECTION_DISPLAY_WIDTH = 300  # Khi tạo section mới
+SECTION_MIN_WIDTH = 450
+SECTION_DISPLAY_WIDTH = 450
+
+# Timer settings cho scheduled execution
+SCHEDULE_CHECK_INTERVAL = 1000  # milliseconds
 
 # Splitter ban đầu (console ẩn, chỉ có notebook list)
 SPLITTER_INITIAL_SIZES = [CONSOLE_INITIAL_WIDTH, NOTEBOOK_LIST_INITIAL_WIDTH]

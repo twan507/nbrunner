@@ -93,8 +93,8 @@ def show_no_notebooks_selected_message(parent, message="Vui lòng chọn ít nh�
     QMessageBox.information(parent, "Thông báo", message)
 
 
-def show_no_running_notebooks_message(parent, message="Không có notebook nào đang chạy."):
-    """Hiển thị thông báo khi không có notebook nào đang chạy"""
+def show_no_running_notebooks_message(parent, message):
+    """Hiển thị thông báo không có notebook nào đang chạy"""
     QMessageBox.information(parent, "Thông báo", message)
 
 
@@ -427,3 +427,113 @@ def setup_paths():
         sys.path.insert(0, modules_path)
 
     return base_path, modules_path, notebooks_path
+
+
+def run_notebook_with_individual_logging(notebook_path, running_threads, section_card, section_name=None):
+    """Chạy notebook với logging riêng cho từng card"""
+    if notebook_path in running_threads:
+        if section_card:
+            section_card.log_message(f"Notebook đang chạy rồi: {os.path.basename(notebook_path)}")
+        return
+
+    def run_thread():
+        """Thread function để chạy notebook với logging riêng"""
+        try:
+            if section_card:
+                section_card.log_message(f"Bắt đầu chạy: {os.path.basename(notebook_path)}")
+                section_card.set_status("running")
+
+            # Đọc và thực thi notebook
+            with open(notebook_path, "r", encoding="utf-8") as f:
+                nb = nbformat.read(f, as_version=4)
+
+            success = True
+            for cell_index, cell in enumerate(nb.cells):
+                if cell.cell_type == "code" and cell.source.strip():
+                    try:
+                        if section_card:
+                            section_card.log_message(f"Thực thi cell {cell_index + 1}...")
+
+                        # Tạo StringIO để capture output
+                        old_stdout = sys.stdout
+                        old_stderr = sys.stderr
+                        stdout_capture = io.StringIO()
+                        stderr_capture = io.StringIO()
+
+                        sys.stdout = stdout_capture
+                        sys.stderr = stderr_capture
+
+                        # Thực thi code
+                        exec(cell.source, globals())
+
+                        # Khôi phục stdout/stderr
+                        sys.stdout = old_stdout
+                        sys.stderr = old_stderr
+
+                        # Lấy output
+                        stdout_output = stdout_capture.getvalue()
+                        stderr_output = stderr_capture.getvalue()
+
+                        if stdout_output and section_card:
+                            section_card.log_message(stdout_output.strip())
+                        if stderr_output and section_card:
+                            section_card.log_message(f"ERROR: {stderr_output.strip()}")
+
+                    except Exception as e:
+                        success = False
+                        error_msg = f"Lỗi tại cell {cell_index + 1}: {str(e)}"
+                        if section_card:
+                            section_card.log_message(error_msg)
+                        break
+
+            if section_card:
+                if success:
+                    section_card.log_message(f"Hoàn thành: {os.path.basename(notebook_path)}")
+                    section_card.on_execution_finished(success=True)
+                else:
+                    section_card.log_message(f"Thất bại: {os.path.basename(notebook_path)}")
+                    section_card.on_execution_finished(success=False)
+
+        except Exception as e:
+            error_msg = f"Lỗi khi chạy notebook {os.path.basename(notebook_path)}: {str(e)}"
+            if section_card:
+                section_card.log_message(error_msg)
+                section_card.on_execution_finished(success=False)
+        finally:
+            # Cleanup
+            if notebook_path in running_threads:
+                del running_threads[notebook_path]
+
+    # Tạo và chạy thread
+    thread = threading.Thread(target=run_thread, daemon=True)
+    running_threads[notebook_path] = thread
+    thread.start()
+
+
+def run_notebook_sequential(notebook_paths, section_widget):
+    """Chạy các notebook lần lượt theo thứ tự"""
+
+    def sequential_runner():
+        for path in notebook_paths:
+            if path in section_widget.notebook_cards:
+                card = section_widget.notebook_cards[path]
+
+                # Kiểm tra execution mode
+                if card.execution_mode == "continuous":
+                    # Chạy liên tục, sau 1 phút chuyển sang notebook tiếp theo
+                    card.run_notebook()
+                    time.sleep(60)  # Wait 1 minute
+                    card.stop_notebook()
+                elif card.execution_mode == "count":
+                    # Chạy đủ số lần rồi chuyển sang notebook tiếp theo
+                    for i in range(card.execution_count):
+                        card.run_notebook()
+                        # Wait for completion (simplified - in real case need proper synchronization)
+                        while card.current_status == "running":
+                            time.sleep(1)
+                        time.sleep(2)  # Brief pause between runs
+
+    # Chạy trong thread riêng
+    thread = threading.Thread(target=sequential_runner, daemon=True)
+    thread.start()
+    return thread
