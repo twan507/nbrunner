@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
     QInputDialog,
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QTime, QMimeData
-from PyQt6.QtGui import QFont, QMouseEvent, QDrag
+from PyQt6.QtGui import QFont, QMouseEvent, QDrag, QDropEvent, QDragEnterEvent
 import config
 import functions
 
@@ -92,9 +92,11 @@ class NotebookCard(QFrame):
         super().mousePressEvent(a0)
 
     # ADDED: Thêm sự kiện mouseMoveEvent để bắt đầu kéo
-    def mouseMoveEvent(self, event: QMouseEvent):
+    def mouseMoveEvent(self, a0: QMouseEvent | None) -> None:
+        if not a0:
+            return
         # Chỉ bắt đầu kéo nếu nút chuột trái được nhấn và thẻ này đang được chọn
-        if event.buttons() != Qt.MouseButton.LeftButton or not self.is_highlighted:
+        if a0.buttons() != Qt.MouseButton.LeftButton or not self.is_highlighted:
             return
 
         drag = QDrag(self)
@@ -104,7 +106,7 @@ class NotebookCard(QFrame):
         selected_paths = self.parent_runner.highlighted_available
         if not selected_paths:
             return
-            
+
         # Đóng gói các đường dẫn vào mime_data, phân tách bằng ký tự xuống dòng
         mime_data.setText('\n'.join(selected_paths))
         drag.setMimeData(mime_data)
@@ -112,7 +114,7 @@ class NotebookCard(QFrame):
         # Tạo một ảnh xem trước của card đang được kéo
         pixmap = self.grab()
         drag.setPixmap(pixmap)
-        drag.setHotSpot(event.pos())
+        drag.setHotSpot(a0.pos())
 
         # Bắt đầu hành động kéo
         drag.exec(Qt.DropAction.MoveAction)
@@ -331,23 +333,29 @@ class SectionWidget(QWidget):
         self.setup_ui()
 
     # ADDED: dragEnterEvent để kiểm tra xem dữ liệu kéo vào có hợp lệ không
-    def dragEnterEvent(self, event):
+    def dragEnterEvent(self, a0: QDragEnterEvent | None) -> None:
+        if not a0:
+            return
+        mime_data = a0.mimeData()
         # Chỉ chấp nhận nếu dữ liệu là dạng text (chúng ta đã đóng gói đường dẫn thành text)
-        if event.mimeData().hasText():
-            event.acceptProposedAction()
+        if mime_data and mime_data.hasText():
+            a0.acceptProposedAction()
         else:
-            event.ignore()
+            a0.ignore()
 
     # ADDED: dropEvent để xử lý khi người dùng thả notebook vào
-    def dropEvent(self, event):
-        if event.mimeData().hasText():
+    def dropEvent(self, a0: QDropEvent | None) -> None:
+        if not a0:
+            return
+        mime_data = a0.mimeData()
+        if mime_data and mime_data.hasText():
             # Lấy dữ liệu text và tách thành danh sách các đường dẫn
-            paths = event.mimeData().text().split('\n')
+            paths = mime_data.text().split('\n')
             # Phát tín hiệu đến cửa sổ chính để xử lý việc di chuyển notebook
             self.notebooks_dropped.emit(self, paths)
-            event.acceptProposedAction()
+            a0.acceptProposedAction()
         else:
-            event.ignore()
+            a0.ignore()
 
 
     def setup_ui(self):
@@ -371,38 +379,6 @@ class SectionWidget(QWidget):
         self.scroll_area.setWidget(self.cards_widget)
         notebooks_group_layout.addWidget(self.scroll_area)
         main_layout.addWidget(notebooks_group, 1)
-
-        controls_group = QGroupBox("⚙️ Điều khiển chung")
-        controls_layout = QVBoxLayout(controls_group)
-        controls_layout.setContentsMargins(12, 20, 12, 12)
-        controls_layout.setSpacing(8)
-
-        # REMOVED: Nút "Thêm Notebook đã chọn" đã bị loại bỏ
-        # self.add_notebook_btn = QPushButton("➕ Thêm Notebook đã chọn")
-        # self.add_notebook_btn.setObjectName("SectionControlButton")
-        # self.add_notebook_btn.clicked.connect(self.add_notebooks)
-        # controls_layout.addWidget(self.add_notebook_btn)
-
-        run_stop_layout = QHBoxLayout()
-        self.run_all_btn = QPushButton("▶️ Chạy cùng lúc")
-        self.run_all_btn.setObjectName("SectionRunButton")
-        self.run_all_btn.clicked.connect(self.run_all_simultaneously)
-        run_stop_layout.addWidget(self.run_all_btn)
-        self.run_sequential_btn = QPushButton("⏯️ Chạy lần lượt")
-        self.run_sequential_btn.setObjectName("SectionRunButton")
-        self.run_sequential_btn.clicked.connect(self.run_all_sequential)
-        run_stop_layout.addWidget(self.run_sequential_btn)
-        self.stop_all_btn = QPushButton("⏹️ Dừng tất cả")
-        self.stop_all_btn.setObjectName("SectionStopButton")
-        self.stop_all_btn.clicked.connect(self.stop_all_notebooks)
-        run_stop_layout.addWidget(self.stop_all_btn)
-        controls_layout.addLayout(run_stop_layout)
-        
-        self.close_section_btn = QPushButton("❌ Đóng Section")
-        self.close_section_btn.setObjectName("SectionRemoveButton")
-        self.close_section_btn.clicked.connect(self.close_section)
-        controls_layout.addWidget(self.close_section_btn)
-        main_layout.addWidget(controls_group, 0)
 
         schedule_group = QGroupBox("⏰ Hẹn giờ tác vụ")
         schedule_main_layout = QVBoxLayout(schedule_group)
@@ -453,6 +429,38 @@ class SectionWidget(QWidget):
         scroll_schedules.setWidget(self.schedule_list_widget)
         schedule_main_layout.addWidget(scroll_schedules)
         main_layout.addWidget(schedule_group, 0)
+
+        controls_group = QGroupBox("⚙️ Điều khiển chung")
+        controls_layout = QVBoxLayout(controls_group)
+        controls_layout.setContentsMargins(12, 20, 12, 12)
+        controls_layout.setSpacing(8)
+
+        # REMOVED: Nút "Thêm Notebook đã chọn" đã bị loại bỏ
+        # self.add_notebook_btn = QPushButton("➕ Thêm Notebook đã chọn")
+        # self.add_notebook_btn.setObjectName("SectionControlButton")
+        # self.add_notebook_btn.clicked.connect(self.add_notebooks)
+        # controls_layout.addWidget(self.add_notebook_btn)
+
+        run_stop_layout = QHBoxLayout()
+        self.run_all_btn = QPushButton("▶️ Chạy cùng lúc")
+        self.run_all_btn.setObjectName("SectionRunButton")
+        self.run_all_btn.clicked.connect(self.run_all_simultaneously)
+        run_stop_layout.addWidget(self.run_all_btn)
+        self.run_sequential_btn = QPushButton("⏯️ Chạy lần lượt")
+        self.run_sequential_btn.setObjectName("SectionRunButton")
+        self.run_sequential_btn.clicked.connect(self.run_all_sequential)
+        run_stop_layout.addWidget(self.run_sequential_btn)
+        self.stop_all_btn = QPushButton("⏹️ Dừng tất cả")
+        self.stop_all_btn.setObjectName("SectionStopButton")
+        self.stop_all_btn.clicked.connect(self.stop_all_notebooks)
+        run_stop_layout.addWidget(self.stop_all_btn)
+        controls_layout.addLayout(run_stop_layout)
+        
+        self.close_section_btn = QPushButton("❌ Đóng Section")
+        self.close_section_btn.setObjectName("SectionRemoveButton")
+        self.close_section_btn.clicked.connect(self.close_section)
+        controls_layout.addWidget(self.close_section_btn)
+        main_layout.addWidget(controls_group, 0)
         
         self.update_schedule_display()
 
@@ -550,10 +558,6 @@ class SectionWidget(QWidget):
 
     def on_card_clear_log_requested(self, path):
         pass
-
-    # REMOVED: add_notebooks is no longer needed as the button is gone.
-    # def add_notebooks(self):
-    #     self.notebook_add_requested.emit(self)
 
     def run_all_simultaneously(self):
         if self.notebook_cards:

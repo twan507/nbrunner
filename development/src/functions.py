@@ -39,31 +39,6 @@ def setup_application_icon(app):
         app.setWindowIcon(QIcon(config.ICON_PATH))
 
 
-def update_window_size_for_section(window, section_added=True, section_width=None):
-    """Cập nhật kích thước cửa sổ khi thêm/xóa section"""
-    if section_width is None:
-        section_width = config.SECTION_DISPLAY_WIDTH
-
-    current_width = window.width()
-    current_height = window.height()
-
-    if section_added:
-        # Tăng chiều rộng window để chứa section mới
-        new_width = current_width + section_width
-        max_width = 1920  # Full HD width
-        new_width = min(new_width, max_width)
-    else:
-        # Giảm chiều rộng window
-        new_width = current_width - section_width
-        # Đảm bảo không nhỏ hơn kích thước tối thiểu
-        base_width = 800
-        console_width = 300 if hasattr(window, "console_visible") and window.console_visible else 0
-        min_width = base_width + console_width
-        new_width = max(new_width, min_width)
-
-    window.resize(new_width, current_height)
-
-
 def create_section_dialog(parent, default_name):
     """Hiển thị dialog để tạo section mới"""
     section_name, ok = QInputDialog.getText(parent, "Tạo Section Mới", "Nhập tên cho section:", text=default_name)
@@ -104,13 +79,8 @@ def move_notebooks_to_section(notebook_paths, available_cards, available_layout,
 
     for path in notebook_paths:
         if path in available_cards:
-            # Lấy thông tin notebook
             description = get_notebook_description(path)
-
-            # Thêm vào section
             section_widget.add_notebook_card(path, description)
-
-            # Xóa khỏi danh sách tổng
             card = available_cards[path]
             available_layout.removeWidget(card)
             card.deleteLater()
@@ -127,25 +97,11 @@ def move_notebooks_from_section(notebook_paths, section_widget, available_layout
 
     for path in notebook_paths:
         if path in section_widget.notebook_cards:
-            # Xóa khỏi section
             section_widget.remove_notebook_card(path)
-
-            # Thêm lại vào danh sách tổng
             create_card_callback(path, available_layout, available_cards)
             moved_count += 1
 
     return moved_count
-
-
-def calculate_window_size_for_sections(base_width, section_count, section_width, console_visible, console_width):
-    """Tính toán kích thước cửa sổ dựa trên số lượng sections"""
-    total_width = base_width + (section_count * section_width)
-    if console_visible:
-        total_width += console_width
-
-    # Giới hạn chiều rộng tối đa
-    max_width = 1920
-    return min(total_width, max_width)
 
 
 def get_notebook_description(path):
@@ -169,7 +125,6 @@ def convert_notebook_to_python(notebook):
     lines = []
     for cell in notebook.cells:
         if cell.cell_type == "code":
-            # Bỏ qua các magic command không thể thực thi trực tiếp
             source_lines = [line for line in cell.source.split("\n") if not line.strip().startswith("%")]
             lines.append("\n".join(source_lines))
     return "\n\n".join(lines)
@@ -177,30 +132,25 @@ def convert_notebook_to_python(notebook):
 
 def handle_card_click(path, available_notebook_cards, highlighted_available):
     """Xử lý sự kiện click trên card notebook"""
-    # Xác định card và list chứa nó (chỉ có available notebooks bây giờ)
     if path not in available_notebook_cards:
         return
 
     card_list = available_notebook_cards
     selection_set = highlighted_available
 
-    # Can't get event here directly, so we check modifiers from QApplication
     is_ctrl_pressed = QApplication.keyboardModifiers() & Qt.KeyboardModifier.ControlModifier
     card = card_list[path]
     is_highlighted = card.is_highlighted
 
     if not is_ctrl_pressed:
-        # Bỏ chọn tất cả trong list hiện tại
         current_selection = list(selection_set)
         for p in current_selection:
             if p in card_list:
                 card_list[p].set_highlighted(False)
         selection_set.clear()
-        # Chọn card mới
         card.set_highlighted(True)
         selection_set.add(path)
     else:
-        # Toggle chọn với Ctrl
         card.set_highlighted(not is_highlighted)
         if card.is_highlighted:
             selection_set.add(path)
@@ -209,20 +159,18 @@ def handle_card_click(path, available_notebook_cards, highlighted_available):
 
 
 def refresh_notebook_list(notebooks_path, available_cards_layout, available_notebook_cards, highlighted_available, create_card_callback):
-    """Làm mới danh sách notebook"""  # Kiểm tra layout có hợp lệ không
+    """Làm mới danh sách notebook"""
     if available_cards_layout is None:
         return
 
     try:
-        # Test layout có hoạt động không bằng cách truy cập thuộc tính
         if hasattr(available_cards_layout, "count"):
             available_cards_layout.count()
         else:
             return
     except RuntimeError:
         return
-    except Exception:
-        return  # Xóa các card cũ một cách an toàn
+
     try:
         while available_cards_layout.count() > 0:
             item = available_cards_layout.takeAt(0)
@@ -244,7 +192,6 @@ def refresh_notebook_list(notebooks_path, available_cards_layout, available_note
 
         if not notebook_files:
             from PyQt6.QtWidgets import QLabel
-
             no_files_label = QLabel("Không tìm thấy notebook.")
             no_files_label.setWordWrap(True)
             try:
@@ -263,24 +210,12 @@ def refresh_notebook_list(notebooks_path, available_cards_layout, available_note
 
     except Exception as e:
         from PyQt6.QtWidgets import QLabel
-
         error_label = QLabel(f"Lỗi: {e}")
         error_label.setWordWrap(True)
         try:
             available_cards_layout.addWidget(error_label)
         except RuntimeError:
             return
-
-
-def run_selected_notebooks(highlighted_available, log_callback, run_notebook_callback):
-    """Chạy các notebooks đã được chọn"""
-    if not highlighted_available:
-        QMessageBox.information(None, "Thông báo", "Vui lòng chọn ít nhất một notebook để chạy.", QMessageBox.StandardButton.Ok)
-        return
-
-    log_callback(f"--- Chạy {len(highlighted_available)} notebooks đã chọn ---")
-    for path in list(highlighted_available):
-        run_notebook_callback(path)
 
 
 def run_notebook_thread(notebook_path, output_queue, running_threads):
@@ -324,67 +259,6 @@ def run_notebook(notebook_path, running_threads, output_queue):
     thread.daemon = True
     running_threads[notebook_path] = thread
     thread.start()
-
-
-def run_notebook_thread_with_section(notebook_path, output_queue, running_threads, section_name=None):
-    """Thread để chạy notebook với thông tin section"""
-    notebook_name = os.path.basename(notebook_path)
-    prefix = f"[{section_name}][{notebook_name}]" if section_name else f"[{notebook_name}]"
-
-    try:
-        output_queue.put(f"{prefix} Bắt đầu...")
-        with open(notebook_path, "r", encoding="utf-8") as f:
-            notebook = nbformat.read(f, as_version=4)
-
-        python_code = convert_notebook_to_python(notebook)
-        notebook_globals = {"__name__": f"nb_{notebook_name}", "__file__": notebook_path}
-
-        old_stdout, old_stderr = sys.stdout, sys.stderr
-        captured_output = io.StringIO()
-        try:
-            sys.stdout = sys.stderr = captured_output
-            exec(python_code, notebook_globals)
-            output = captured_output.getvalue()
-            if output.strip():
-                output_queue.put(f"{prefix} Output:\n{output}")
-            output_queue.put(f"{prefix} Hoàn thành!")
-        except Exception as e:
-            output_queue.put(f"{prefix} Lỗi: {e}\n{traceback.format_exc()}")
-        finally:
-            sys.stdout, sys.stderr = old_stdout, old_stderr
-    except Exception as e:
-        output_queue.put(f"{prefix} Lỗi đọc file: {e}")
-    finally:
-        if notebook_path in running_threads:
-            del running_threads[notebook_path]
-
-
-def run_notebook_with_section(notebook_path, running_threads, output_queue, section_name=None):
-    """Chạy một notebook với thông tin section"""
-    notebook_name = os.path.basename(notebook_path)
-    prefix = f"[{section_name}][{notebook_name}]" if section_name else f"[{notebook_name}]"
-
-    if notebook_path in running_threads:
-        output_queue.put(f"{prefix} Đang chạy, bỏ qua.")
-        return
-    thread = threading.Thread(target=run_notebook_thread_with_section, args=(notebook_path, output_queue, running_threads, section_name))
-    thread.daemon = True
-    running_threads[notebook_path] = thread
-    thread.start()
-
-
-def stop_all_notebooks(running_threads, log_callback):
-    """Dừng tất cả notebooks"""
-    if not running_threads:
-        log_callback("Không có notebook nào đang chạy.")
-        return
-
-    # Lưu ý: Việc dừng thread một cách an toàn trong Python là phức tạp.
-    # Cách tiếp cận này chỉ ngăn các thread mới bắt đầu và xóa tham chiếu.
-    # Các thread đang chạy sẽ tiếp tục cho đến khi hoàn thành.
-    log_callback(f"Gửi yêu cầu dừng {len(running_threads)} notebooks...")
-    running_threads.clear()
-    QMessageBox.information(None, "Dừng Notebooks", "Đã gửi yêu cầu dừng tất cả notebooks. Các tác vụ đang chạy sẽ hoàn thành.")
 
 
 def log_message(message, output_queue):
@@ -437,13 +311,11 @@ def run_notebook_with_individual_logging(notebook_path, running_threads, section
         return
 
     def run_thread():
-        """Thread function để chạy notebook với logging riêng"""
         try:
             if section_card:
                 section_card.log_message(f"Bắt đầu chạy: {os.path.basename(notebook_path)}")
                 section_card.set_status("running")
 
-            # Đọc và thực thi notebook
             with open(notebook_path, "r", encoding="utf-8") as f:
                 nb = nbformat.read(f, as_version=4)
 
@@ -454,23 +326,17 @@ def run_notebook_with_individual_logging(notebook_path, running_threads, section
                         if section_card:
                             section_card.log_message(f"Thực thi cell {cell_index + 1}...")
 
-                        # Tạo StringIO để capture output
                         old_stdout = sys.stdout
                         old_stderr = sys.stderr
                         stdout_capture = io.StringIO()
                         stderr_capture = io.StringIO()
-
                         sys.stdout = stdout_capture
                         sys.stderr = stderr_capture
 
-                        # Thực thi code
                         exec(cell.source, globals())
 
-                        # Khôi phục stdout/stderr
                         sys.stdout = old_stdout
                         sys.stderr = old_stderr
-
-                        # Lấy output
                         stdout_output = stdout_capture.getvalue()
                         stderr_output = stderr_capture.getvalue()
 
@@ -485,14 +351,10 @@ def run_notebook_with_individual_logging(notebook_path, running_threads, section
                         if section_card:
                             section_card.log_message(error_msg)
                         break
-
             if section_card:
-                if success:
-                    section_card.log_message(f"Hoàn thành: {os.path.basename(notebook_path)}")
-                    section_card.on_execution_finished(success=True)
-                else:
-                    section_card.log_message(f"Thất bại: {os.path.basename(notebook_path)}")
-                    section_card.on_execution_finished(success=False)
+                status_msg = "Hoàn thành" if success else "Thất bại"
+                section_card.log_message(f"{status_msg}: {os.path.basename(notebook_path)}")
+                section_card.on_execution_finished(success=success)
 
         except Exception as e:
             error_msg = f"Lỗi khi chạy notebook {os.path.basename(notebook_path)}: {str(e)}"
@@ -500,40 +362,9 @@ def run_notebook_with_individual_logging(notebook_path, running_threads, section
                 section_card.log_message(error_msg)
                 section_card.on_execution_finished(success=False)
         finally:
-            # Cleanup
             if notebook_path in running_threads:
                 del running_threads[notebook_path]
 
-    # Tạo và chạy thread
     thread = threading.Thread(target=run_thread, daemon=True)
     running_threads[notebook_path] = thread
     thread.start()
-
-
-def run_notebook_sequential(notebook_paths, section_widget):
-    """Chạy các notebook lần lượt theo thứ tự"""
-
-    def sequential_runner():
-        for path in notebook_paths:
-            if path in section_widget.notebook_cards:
-                card = section_widget.notebook_cards[path]
-
-                # Kiểm tra execution mode
-                if card.execution_mode == "continuous":
-                    # Chạy liên tục, sau 1 phút chuyển sang notebook tiếp theo
-                    card.run_notebook()
-                    time.sleep(60)  # Wait 1 minute
-                    card.stop_notebook()
-                elif card.execution_mode == "count":
-                    # Chạy đủ số lần rồi chuyển sang notebook tiếp theo
-                    for i in range(card.execution_count):
-                        card.run_notebook()
-                        # Wait for completion (simplified - in real case need proper synchronization)
-                        while card.current_status == "running":
-                            time.sleep(1)
-                        time.sleep(2)  # Brief pause between runs
-
-    # Chạy trong thread riêng
-    thread = threading.Thread(target=sequential_runner, daemon=True)
-    thread.start()
-    return thread

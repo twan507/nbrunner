@@ -262,8 +262,7 @@ class NotebookRunner(QMainWindow):
         if section_id in self.sections:
             del self.sections[section_id]
 
-        if section_width > 0:
-            self.resize(self.width() - section_width, self.height())
+        self.resize(self.width() - section_width, self.height())
         self._update_window_minimum_size()
         self.log_message(f"Đã đóng section: {section_widget.section_name}")
 
