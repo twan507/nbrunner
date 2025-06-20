@@ -104,13 +104,6 @@ def get_stylesheet():
         #StopButton:hover {
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #bd2130, stop:1 #a71e2a);
         }
-
-        #ToggleConsoleButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #007bff, stop:1 #0056b3);
-        }
-        #ToggleConsoleButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0056b3, stop:1 #004085);
-        }
         
         /* === TEXT AREAS === */
         #Console {

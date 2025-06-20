@@ -98,22 +98,20 @@ PYINSTALLER_EXTRA_ARGS = get_pyinstaller_args()
 
 # Kích thước cửa sổ
 WINDOW_MIN_HEIGHT = 800
-WINDOW_INITIAL_WIDTH = 300 
+WINDOW_INITIAL_WIDTH = 800 
 WINDOW_INITIAL_HEIGHT = 800
 
 # Cột Console
 CONSOLE_MIN_WIDTH = 300
-CONSOLE_DISPLAY_WIDTH = 500  # Khi hiện console
+CONSOLE_INITIAL_WIDTH = 400 
 
 # Cột Notebook List
-NOTEBOOK_LIST_INITIAL_WIDTH = WINDOW_INITIAL_WIDTH
+NOTEBOOK_LIST_INITIAL_WIDTH = 400
 NOTEBOOK_LIST_MIN_WIDTH = 300  # Tăng lên để luôn có đủ chỗ cho scrollbar
-NOTEBOOK_LIST_SCROLLBAR_PADDING = 50  # Thêm padding khi có thanh cuộn
 
 # Cột Section
 SECTION_MIN_WIDTH = 300  # Tăng lên để luôn có đủ chỗ cho scrollbar
 SECTION_DISPLAY_WIDTH = 300  # Khi tạo section mới
-SECTION_SCROLLBAR_PADDING = 50  # Thêm padding khi có thanh cuộn
 
 # Splitter ban đầu (console ẩn, chỉ có notebook list)
-SPLITTER_INITIAL_SIZES = [0, NOTEBOOK_LIST_INITIAL_WIDTH]
+SPLITTER_INITIAL_SIZES = [CONSOLE_INITIAL_WIDTH, NOTEBOOK_LIST_INITIAL_WIDTH]
