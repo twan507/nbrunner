@@ -21,9 +21,8 @@ def get_stylesheet():
             border: 2px solid #e9ecef;
             border-radius: 12px;
             margin-top: 12px;
-            padding-top: 8px;
+            padding: 8px;
             background-color: #ffffff;
-            color: #2c3e50;
         }
         QGroupBox::title {
             subcontrol-origin: margin;
@@ -33,33 +32,35 @@ def get_stylesheet():
             color: #495057;
             background-color: #ffffff;
         }
-          #LogGroup, #AvailableGroup, #ControlsGroup {
+        #LogGroup, #AvailableGroup, #ControlsGroup {
             border: 2px solid #dee2e6;
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);
         }
         
         #SectionGroup {
             border: 2px solid #007bff;
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f8fcff, stop:1 #e3f2fd);
-            border-radius: 12px;
+            background: #f0f8ff;
             padding: 5px;
+            margin-top: 5px;
         }
-        
+        /* Bỏ title mặc định của SectionGroup để dùng ClickableLabel */
         #SectionGroup::title {
             subcontrol-origin: margin;
             subcontrol-position: top left;
-            padding: 0 8px;
-            left: 15px;
-            color: #007bff;
-            background-color: #f8fcff;
-            font-weight: bold;
+            left: -9999px; /* Hide the original title */
         }
         
-        #DefaultSectionGroup {
-            border: 3px solid #28a745;
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #d4edda, stop:1 #c3e6cb);
-            border-radius: 12px;
+        #SectionTitleLabel {
+            font-size: 13pt;
+            font-weight: bold;
+            color: #0056b3;
             padding: 5px;
+            border-bottom: 2px solid #e0e0e0;
+            margin-bottom: 5px;
+        }
+        #SectionTitleLabel:hover {
+            background-color: #e3f2fd;
+            border-radius: 5px;
         }
         
         /* === BUTTONS === */
@@ -74,437 +75,68 @@ def get_stylesheet():
             border-radius: 8px;
             min-height: 20px;
         }
-        QPushButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0056b3, stop:1 #004085);
-            color: #ffffff;
+        QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0056b3, stop:1 #004085); }
+        QPushButton:pressed { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #004085, stop:1 #002752); }
+        QPushButton:disabled { background-color: #adb5bd; color: #e9ecef; }
+
+        /* === DIALOGS & MESSAGE BOXES === */
+        QMessageBox, QInputDialog { background-color: #ffffff; color: #2c3e50; }
+        QMessageBox QPushButton, QInputDialog QPushButton {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #007bff, stop:1 #0056b3);
+            color: #ffffff; border: none; padding: 8px 16px; border-radius: 6px; min-width: 80px;
         }
-        QPushButton:pressed {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #004085, stop:1 #002752);
-            color: #ffffff;
+        QMessageBox QPushButton:hover, QInputDialog QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0056b3, stop:1 #004085); }
+        QInputDialog QLineEdit {
+            background-color: #ffffff; border: 2px solid #dee2e6; border-radius: 6px;
+            padding: 8px; color: #2c3e50; font-size: 10pt;
         }
-        
-        /* === SPECIALIZED BUTTONS === */
-        #ClearButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6c757d, stop:1 #495057);
-        }
-        #ClearButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #495057, stop:1 #343a40);
-        }
-        
-        #RefreshButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #28a745, stop:1 #1e7e34);
-        }
-        #RefreshButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1e7e34, stop:1 #155724);
-        }
-          #StopButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #dc3545, stop:1 #bd2130);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 4px 8px;
-            font-weight: bold;
-            font-size: 9pt;
-            max-width: 70px;
-            max-height: 25px;
-        }
-        #StopButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #bd2130, stop:1 #a71e2a);
-        }
-        
-        /* === TEXT AREAS === */
+
+        /* === SCROLL & TEXT AREAS === */
+        QScrollArea { border: none; background-color: transparent; }
+        #AvailableScrollArea, #SectionScrollArea { border: 1px solid #e9ecef; border-radius: 8px; background-color: #ffffff; }
+        #CardsContainer { background-color: #ffffff; border-radius: 6px; }
         #Console {
-            background-color: #1e1e1e;
-            color: #ffffff;
-            border: 2px solid #495057;
-            border-radius: 8px;
-            padding: 8px;
-            font-family: "JetBrains Mono", "Consolas", monospace;
-            selection-background-color: #007acc;
+            background-color: #1e1e1e; color: #d4d4d4; border: 2px solid #495057;
+            border-radius: 8px; padding: 8px; font-family: "JetBrains Mono", "Consolas", monospace;
         }
-        
-        QTextEdit {
-            background-color: #ffffff;
-            border: 2px solid #dee2e6;
-            border-radius: 8px;
-            color: #2c3e50;
-            padding: 8px;
-        }
-        
-        /* === SCROLL AREAS === */
-        QScrollArea {
-            border: none;
-            background-color: transparent;
-        }
-        #AvailableScrollArea, #SectionScrollArea, #SectionsScrollArea {
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-            background-color: #ffffff;
-        }
-        
-        /* === CARDS CONTAINER === */
-        #CardsContainer {
-            background-color: #ffffff;
-            border-radius: 6px;
-        }
-        #SectionsContainer {
-            background-color: transparent;
-        }
+        QTextEdit { background-color: #ffffff; border: 2px solid #dee2e6; border-radius: 8px; color: #2c3e50; padding: 8px; }
         
         /* === CARDS === */
-        #Card, #SelectedCard {
-            border: 2px solid #e9ecef;
-            border-radius: 10px;
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);
-            margin: 2px;
-            padding: 4px;
-        }
-        #Card:hover {
-            border: 2px solid #007bff;
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e3f2fd, stop:1 #bbdefb);
-        }
-        #SelectedCard {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #cce5ff, stop:1 #99d6ff);
-            border: 2px solid #007bff;
-        }
-        
-        /* === LABELS === */
-        QLabel, #CardLabel {
-            background-color: transparent;
-            border: none;
-            color: #2c3e50;
-        }
-        
-        #SectionsTitle {
-            color: #495057;
-            font-size: 12pt;
-            font-weight: bold;
-        }
-        
-        #SectionTitle {
-            color: #343a40;
-            font-weight: bold;
-            padding: 5px 10px;
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f8f9fa, stop:1 #e9ecef);
-            border-radius: 8px;
-            border: 1px solid #dee2e6;
-        }
-        #SectionTitle:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e3f2fd, stop:1 #bbdefb);
-            border: 1px solid #007bff;
-        }
-        
-        /* === HEADERS === */
-        #SectionsHeader {
-            background-color: transparent;
-            padding: 8px 0px;
-            border-bottom: 1px solid #e9ecef;
-        }
-        
-        #SectionHeader {
-            background-color: transparent;
-            padding: 2px 0px;
-        }
-        
-        /* === MESSAGE BOXES === */
-        QMessageBox {
-            background-color: #ffffff;
-            color: #2c3e50;
-        }
-        QMessageBox QPushButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #007bff, stop:1 #0056b3);
-            color: #ffffff;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            min-width: 80px;
-        }
-        QMessageBox QPushButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0056b3, stop:1 #004085);
-        }
-        
-        /* === INPUT DIALOGS === */
-        QInputDialog {
-            background-color: #ffffff;
-            color: #2c3e50;
-        }
-        QInputDialog QLineEdit {
-            background-color: #ffffff;
-            border: 2px solid #dee2e6;
-            border-radius: 6px;
-            padding: 8px;
-            color: #2c3e50;
-        }
+        #Card, #SelectedCard { border: 2px solid #e9ecef; border-radius: 10px; background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa); margin: 2px; padding: 4px; }
+        #Card:hover { border: 2px solid #007bff; background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e3f2fd, stop:1 #bbdefb); }
+        #SelectedCard { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #cce5ff, stop:1 #99d6ff); border: 2px solid #007bff; }
+        QLabel, #CardLabel { background-color: transparent; border: none; color: #2c3e50; }
         
         /* === SPLITTER === */
-        QSplitter {
-            background-color: #f8f9fa;
-        }
-        QSplitter::handle {
-            background: transparent;
-            border: none;
-            margin: 0px;
-        }
-        QSplitter::handle:horizontal {
-            width: 6px;
-            border-radius: 0px;
-        }
-        QSplitter::handle:hover {
-            background: rgba(0, 123, 255, 0.1);
-            border: none;
-        }        #MainSplitter {
-            background-color: transparent;
-        }
+        QSplitter::handle { background: transparent; } QSplitter::handle:horizontal { width: 6px; } QSplitter::handle:hover { background: rgba(0, 123, 255, 0.1); }
         
-        /* === SCROLLBARS === */
-        QScrollBar:vertical {
-            background: transparent;
-            width: 2px;
-            border: none;
-            border-radius: 1px;
-            margin: 0px;
-        }
-        QScrollBar::handle:vertical {
-            background: #adb5bd;
-            min-height: 20px;
-            border-radius: 1px;
-            margin: 0px;
-        }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-            border: none;
-            background: none;
-        }
-        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-            background: none;
-        }
-        QScrollBar:horizontal {
-            background: transparent;
-            height: 2px;
-            border: none;
-            border-radius: 1px;
-            margin: 0px;
-        }
-        QScrollBar::handle:horizontal {
-            background: #adb5bd;
-            min-width: 20px;
-            border-radius: 1px;
-            margin: 0px;
-        }
-        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-            border: none;
-            background: none;
-        }
-        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
-            background: none;
-        }
+        /* === NOTEBOOK CARD (IN SECTION) === */
+        #SectionCard { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa); border: 1px solid #dee2e6; border-radius: 8px; margin: 5px; padding: 8px; }
+        #SectionConsole { background-color: #2d3748; color: #e2e8f0; border: 1px solid #4a5568; border-radius: 6px; font-family: "JetBrains Mono", monospace; font-size: 8pt; padding: 6px; }
         
-        /* === SCROLLBARS FOR NOTEBOOK LIST === */
-        #AvailableScrollArea QScrollBar:vertical,
-        #SectionScrollArea QScrollBar:vertical,
-        #SectionsScrollArea QScrollBar:vertical {
-            background: #f1f3f4;
-            width: 2px;
-            border: none;
-            border-radius: 1px;
-        }
-        #AvailableScrollArea QScrollBar::handle:vertical,
-        #SectionScrollArea QScrollBar::handle:vertical,
-        #SectionsScrollArea QScrollBar::handle:vertical {
-            background: #c1c7cd;
-            border-radius: 1px;
-            min-height: 20px;
-            margin: 0px;
-        }
-        #AvailableScrollArea QScrollBar::add-line:vertical,
-        #AvailableScrollArea QScrollBar::sub-line:vertical,
-        #SectionScrollArea QScrollBar::add-line:vertical,
-        #SectionScrollArea QScrollBar::sub-line:vertical,
-        #SectionsScrollArea QScrollBar::add-line:vertical,
-        #SectionsScrollArea QScrollBar::sub-line:vertical {
-            border: none;
-            background: none;
-            height: 0px;
-        }
-        #AvailableScrollArea QScrollBar::add-page:vertical,
-        #AvailableScrollArea QScrollBar::sub-page:vertical,
-        #SectionScrollArea QScrollBar::add-page:vertical,
-        #SectionScrollArea QScrollBar::sub-page:vertical,
-        #SectionsScrollArea QScrollBar::add-page:vertical,
-        #SectionsScrollArea QScrollBar::sub-page:vertical {
-            background: none;
-        }
-          /* === SECTION NOTEBOOK CARDS === */
-        #SectionCard {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);
-            border: 2px solid #dee2e6;
-            border-radius: 8px;
-            margin: 5px;
-            padding: 8px;
-        }
-        
-        #SectionConsole {
-            background-color: #2d3748;
-            color: #e2e8f0;
-            border: 1px solid #4a5568;
-            border-radius: 6px;
-            font-family: "JetBrains Mono", "Consolas", monospace;
-            font-size: 8pt;
-            padding: 6px;
-        }
-          /* === RUN BUTTON === */
-        #RunButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #28a745, stop:1 #218838);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 4px 8px;
-            font-weight: bold;
-            font-size: 9pt;
-            max-width: 70px;
-            max-height: 25px;
-        }
-        
-        #RunButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #34ce57, stop:1 #28a745);
-        }
-        
-        #RunButton:pressed {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1e7e34, stop:1 #155724);
-        }
-        
-        #RunButton:disabled {
-            background: #6c757d;
-            color: #adb5bd;
-        }
-          /* === REMOVE BUTTON === */
-        #RemoveButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #dc3545, stop:1 #c82333);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 4px 8px;
-            font-weight: bold;
-            font-size: 9pt;
-            max-width: 70px;
-            max-height: 25px;
-        }
-        
-        #RemoveButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e4606d, stop:1 #dc3545);
-        }
-        
-        #RemoveButton:pressed {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #bd2130, stop:1 #a71e2a);
-        }
-          /* === CLEAR LOG BUTTON === */
-        #ClearLogButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6c757d, stop:1 #5a6268);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 4px 8px;
-            font-weight: bold;
-            font-size: 9pt;
-            max-width: 70px;
-            max-height: 25px;
-        }
-        
-        #ClearLogButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #7c858d, stop:1 #6c757d);
-        }
-        
-        /* === SECTION CONTROLS FRAME === */
-        #SectionControlsFrame {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f8f9fa, stop:1 #e9ecef);
-            border: 2px solid #dee2e6;
-            border-radius: 8px;
-            margin: 5px 0px;
-            padding: 5px;
-        }
-        
+        #RunButton, #StopButton, #RemoveButton, #ClearLogButton { border: none; border-radius: 6px; padding: 4px 8px; font-weight: bold; font-size: 9pt; max-width: 70px; max-height: 25px; }
+        #RunButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #28a745, stop:1 #218838); color: white; }
+        #RunButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #34ce57, stop:1 #28a745); }
+        #RunButton:disabled { background: #6c757d; color: #adb5bd; }
+        #StopButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #dc3545, stop:1 #bd2130); color: white; }
+        #StopButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #bd2130, stop:1 #a71e2a); }
+        #RemoveButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6f42c1, stop:1 #5a32a3); color: white; }
+        #RemoveButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #865fcf, stop:1 #6f42c1); }
+        #ClearLogButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6c757d, stop:1 #5a6268); color: white; }
+        #ClearLogButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #7c858d, stop:1 #6c757d); }
+
         /* === SECTION CONTROL BUTTONS === */
-        #SectionControlButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #17a2b8, stop:1 #138496);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 8px 12px;
-            font-weight: 500;
-            font-size: 10pt;
-            min-height: 20px;
+        #SectionControlButton, #SectionRunButton, #SectionStopButton, #SectionRemoveButton, #SetScheduleButton, #CancelScheduleButton {
+            color: white; border: none; border-radius: 6px; padding: 8px 12px; font-weight: 500; font-size: 10pt; min-height: 20px;
         }
-        #SectionControlButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1fc7e0, stop:1 #17a2b8);
-        }
-        #SectionControlButton:pressed {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #138496, stop:1 #0f6674);
-        }
+        #SectionControlButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #17a2b8, stop:1 #138496); }
+        #SectionRunButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #28a745, stop:1 #1e7e34); }
+        #SectionStopButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #fd7e14, stop:1 #e8590c); }
+        #SectionRemoveButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #dc3545, stop:1 #c82333); }
         
-        #SectionRunButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #28a745, stop:1 #1e7e34);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 8px 12px;
-            font-weight: 500;
-            font-size: 10pt;
-            min-height: 20px;
-        }
-        #SectionRunButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #34ce57, stop:1 #28a745);
-        }
-        #SectionRunButton:pressed {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1e7e34, stop:1 #155724);
-        }
-        
-        #SectionStopButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #fd7e14, stop:1 #e8590c);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 8px 12px;
-            font-weight: 500;
-            font-size: 10pt;
-            min-height: 20px;
-        }
-        #SectionStopButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #fd9441, stop:1 #fd7e14);
-        }
-        #SectionStopButton:pressed {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e8590c, stop:1 #d54309);
-        }
-        
-        #SectionClearButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6c757d, stop:1 #545b62);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 8px 12px;
-            font-weight: 500;
-            font-size: 10pt;
-            min-height: 20px;
-        }
-        #SectionClearButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #7c858d, stop:1 #6c757d);
-        }
-        #SectionClearButton:pressed {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #545b62, stop:1 #44494f);
-        }
-        
-        #SectionRemoveButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #dc3545, stop:1 #c82333);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 8px 12px;
-            font-weight: 500;
-            font-size: 10pt;
-            min-height: 20px;
-        }
-        #SectionRemoveButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e4606d, stop:1 #dc3545);
-        }
-        #SectionRemoveButton:pressed {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #c82333, stop:1 #a71e2a);
-        }
+        /* STYLES FOR SCHEDULER */
+        #SetScheduleButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #28a745, stop:1 #1e7e34); padding: 5px 10px; font-size: 9pt; }
+        #SetScheduleButton:disabled { background-color: #a3d9b1; color: #d4edda; }
+        #CancelScheduleButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #dc3545, stop:1 #c82333); padding: 5px 10px; font-size: 9pt; }
+        #CancelScheduleButton:disabled { background-color: #f5c6cb; color: #f8d7da; }
     """
