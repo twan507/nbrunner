@@ -144,7 +144,6 @@ class SectionNotebookCard(QFrame):
         self.mode_combo.currentTextChanged.connect(self.on_mode_changed)
         mode_layout.addWidget(self.mode_combo)
 
-        # === THAY ĐỔI Ở ĐÂY: Thêm style cho QSpinBox ===
         self.count_spin = QSpinBox()
         self.count_spin.setStyleSheet("""
                 QSpinBox {
@@ -159,9 +158,8 @@ class SectionNotebookCard(QFrame):
         self.count_spin.setMaximum(999)
         self.count_spin.setValue(1)
         self.count_spin.setFixedWidth(65)
-        # === THÊM 2 DÒNG NÀY ĐỂ THAY ĐỔI ===
-        self.count_spin.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)  # 1. Loại bỏ nút bấm
-        self.count_spin.setAlignment(Qt.AlignmentFlag.AlignCenter)  # 2. Căn giữa số
+        self.count_spin.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
+        self.count_spin.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.count_spin.setVisible(False)
         self.count_spin.valueChanged.connect(self.on_count_changed)
@@ -204,8 +202,8 @@ class SectionNotebookCard(QFrame):
         log_layout.addLayout(log_header)
         self.log_console = QTextEdit()
         self.log_console.setReadOnly(True)
-        self.log_console.setObjectName("SectionConsole")  # Tên này sẽ được style trong styles.py
-        self.log_console.setFixedHeight(80)  # Thiết lập chiều cao cố định 100px
+        self.log_console.setObjectName("SectionConsole")
+        self.log_console.setFixedHeight(80)
         log_layout.addWidget(self.log_console)
         layout.addLayout(log_layout)
         layout.addStretch()
@@ -255,7 +253,7 @@ class SectionNotebookCard(QFrame):
 
     def start_timer(self):
         self.start_time = time.time()
-        self.timer.start(10)  # Cập nhật mỗi 10ms
+        self.timer.start(10)
 
     def stop_timer(self):
         self.timer.stop()
@@ -263,14 +261,10 @@ class SectionNotebookCard(QFrame):
     def update_timer(self):
         if self.start_time:
             elapsed = time.time() - self.start_time
-            total_ms = int(elapsed * 1000)  # Tổng số milliseconds
-
-            # Tính phút, giây, milliseconds
+            total_ms = int(elapsed * 1000)
             minutes = total_ms // 60000
             seconds = (total_ms % 60000) // 1000
             milliseconds = total_ms % 1000
-
-            # Định dạng mm:ss:ms (chỉ lấy 2 chữ số đầu của milliseconds)
             self.timer_label.setText(f"{minutes:02d}:{seconds:02d}:{milliseconds // 10:02d}")
 
     def log_message(self, message):
@@ -283,15 +277,13 @@ class SectionNotebookCard(QFrame):
         self.set_status("success" if success else "error")
 
 
-class SectionWidget(QGroupBox):
+class SectionWidget(QWidget):
     notebook_add_requested = pyqtSignal(object)
     notebook_remove_requested = pyqtSignal(object, list)
     section_close_requested = pyqtSignal(object)
 
     def __init__(self, section_name, section_id, parent_runner=None):
         super().__init__()
-        self.setTitle("")
-        self.setObjectName("SectionGroup")
         self.section_name = section_name
         self.section_id = section_id
         self.parent_runner = parent_runner
@@ -307,17 +299,14 @@ class SectionWidget(QGroupBox):
 
     def setup_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(10, 5, 10, 10)
+        main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(10)
 
-        self.title_label = ClickableLabel(self.section_name)
-        self.title_label.setObjectName("SectionTitleLabel")
-        self.title_label.doubleClicked.connect(self.rename_section)
-        main_layout.addWidget(self.title_label)
-
-        notebooks_group = QGroupBox("Notebooks đã thêm")
+        # === Group 1: Notebooks List (Stretchable) ===
+        notebooks_group = QGroupBox(f"📋 {self.section_name}")
         notebooks_group_layout = QVBoxLayout(notebooks_group)
-        notebooks_group_layout.setContentsMargins(5, 5, 5, 5)
+        notebooks_group_layout.setContentsMargins(12, 20, 12, 12)
+        notebooks_group_layout.setSpacing(8)
 
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
@@ -329,34 +318,55 @@ class SectionWidget(QGroupBox):
         self.cards_layout.setSpacing(10)
         self.scroll_area.setWidget(self.cards_widget)
         notebooks_group_layout.addWidget(self.scroll_area)
+        # THAY ĐỔI Ở ĐÂY: Thêm group này với stretch factor = 1
+        main_layout.addWidget(notebooks_group, 1)
 
-        controls_group = QGroupBox("Điều khiển")
+        # === Group 2: Controls (Fixed Size) ===
+        controls_group = QGroupBox("⚙️ Điều khiển chung")
         controls_layout = QVBoxLayout(controls_group)
-        controls_layout.setContentsMargins(5, 5, 5, 5)
+        controls_layout.setContentsMargins(12, 20, 12, 12)
         controls_layout.setSpacing(8)
 
-        self.add_notebook_btn = QPushButton("Thêm Notebook")
+        self.add_notebook_btn = QPushButton("➕ Thêm Notebook đã chọn")
         self.add_notebook_btn.setObjectName("SectionControlButton")
         self.add_notebook_btn.clicked.connect(self.add_notebooks)
         controls_layout.addWidget(self.add_notebook_btn)
 
-        schedule_group = QGroupBox("Hẹn giờ tác vụ")
+        run_stop_layout = QHBoxLayout()
+        self.run_all_btn = QPushButton("▶️ Chạy cùng lúc")
+        self.run_all_btn.setObjectName("SectionRunButton")
+        self.run_all_btn.clicked.connect(self.run_all_simultaneously)
+        run_stop_layout.addWidget(self.run_all_btn)
+        self.run_sequential_btn = QPushButton("⏯️ Chạy lần lượt")
+        self.run_sequential_btn.setObjectName("SectionRunButton")
+        self.run_sequential_btn.clicked.connect(self.run_all_sequential)
+        run_stop_layout.addWidget(self.run_sequential_btn)
+        self.stop_all_btn = QPushButton("⏹️ Dừng tất cả")
+        self.stop_all_btn.setObjectName("SectionStopButton")
+        self.stop_all_btn.clicked.connect(self.stop_all_notebooks)
+        run_stop_layout.addWidget(self.stop_all_btn)
+        controls_layout.addLayout(run_stop_layout)
+        
+        self.close_section_btn = QPushButton("❌ Đóng Section")
+        self.close_section_btn.setObjectName("SectionRemoveButton")
+        self.close_section_btn.clicked.connect(self.close_section)
+        controls_layout.addWidget(self.close_section_btn)
+        main_layout.addWidget(controls_group, 0) # stretch factor = 0
+
+        # === Group 3: Scheduler (Fixed Size) ===
+        schedule_group = QGroupBox("⏰ Hẹn giờ tác vụ")
         schedule_main_layout = QVBoxLayout(schedule_group)
-        schedule_main_layout.setContentsMargins(8, 12, 8, 8)
+        schedule_main_layout.setContentsMargins(12, 20, 12, 12)
         schedule_main_layout.setSpacing(10)
 
         add_schedule_layout = QHBoxLayout()
         add_schedule_layout.addWidget(QLabel("Hành động:"))
-
         self.action_combo = QComboBox()
         self.action_combo.addItems(["Chạy cùng lúc", "Chạy lần lượt", "Dừng tất cả"])
         self.action_combo.setFont(QFont("Segoe UI", 10))
         add_schedule_layout.addWidget(self.action_combo, 1)
-
         add_schedule_layout.addSpacing(5)
-
         add_schedule_layout.addWidget(QLabel("Lúc:"))
-
         self.schedule_time_edit = QTimeEdit()
         self.schedule_time_edit.setDisplayFormat("HH:mm")
         self.schedule_time_edit.setTime(QTime.currentTime().addSecs(60))
@@ -372,62 +382,29 @@ class SectionWidget(QGroupBox):
                 color: black;
             }
         """)
-
         add_schedule_layout.addWidget(self.schedule_time_edit)
         self.add_schedule_btn = QPushButton("Thêm")
         self.add_schedule_btn.setObjectName("SetScheduleButton")
         self.add_schedule_btn.clicked.connect(self.add_schedule)
         add_schedule_layout.addWidget(self.add_schedule_btn)
-
         schedule_main_layout.addLayout(add_schedule_layout)
 
         scroll_schedules = QScrollArea()
         scroll_schedules.setWidgetResizable(True)
         scroll_schedules.setStyleSheet("QScrollArea { border: 1px solid #dee2e6; border-radius: 4px; }")
-
+        scroll_schedules.setFixedHeight(60)
         self.schedule_list_widget = QWidget()
         self.schedule_list_widget.setObjectName("ScheduleListContainer")
         self.schedule_list_widget.setStyleSheet("QWidget#ScheduleListContainer { background-color: white; }")
-
         self.schedule_list_layout = QVBoxLayout(self.schedule_list_widget)
         self.schedule_list_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.schedule_list_layout.setContentsMargins(5, 5, 5, 5)
         self.schedule_list_layout.setSpacing(5)
-
         scroll_schedules.setWidget(self.schedule_list_widget)
         schedule_main_layout.addWidget(scroll_schedules)
-        controls_layout.addWidget(schedule_group)
-
-        run_stop_layout = QHBoxLayout()
-        self.run_all_btn = QPushButton("Chạy cùng lúc")
-        self.run_all_btn.setObjectName("SectionRunButton")
-        self.run_all_btn.clicked.connect(self.run_all_simultaneously)
-        run_stop_layout.addWidget(self.run_all_btn)
-        self.run_sequential_btn = QPushButton("Chạy lần lượt")
-        self.run_sequential_btn.setObjectName("SectionRunButton")
-        self.run_sequential_btn.clicked.connect(self.run_all_sequential)
-        run_stop_layout.addWidget(self.run_sequential_btn)
-        self.stop_all_btn = QPushButton("Dừng tất cả")
-        self.stop_all_btn.setObjectName("SectionStopButton")
-        self.stop_all_btn.clicked.connect(self.stop_all_notebooks)
-        run_stop_layout.addWidget(self.stop_all_btn)
-        controls_layout.addLayout(run_stop_layout)
-        self.close_section_btn = QPushButton("Đóng Section")
-        self.close_section_btn.setObjectName("SectionRemoveButton")
-        self.close_section_btn.clicked.connect(self.close_section)
-        controls_layout.addWidget(self.close_section_btn)
-
+        main_layout.addWidget(schedule_group, 0) # stretch factor = 0
         
-        main_layout.addWidget(notebooks_group)
-        main_layout.addWidget(controls_group)
-
-    def rename_section(self):
-        new_name, ok = QInputDialog.getText(self, "Đổi tên Section", "Nhập tên mới:", text=self.section_name)
-        if ok and new_name:
-            self.section_name = new_name
-            self.title_label.setText(new_name)
-            if self.parent_runner:
-                self.parent_runner.log_message(f"Đã đổi tên section thành '{new_name}'")
+        self.update_schedule_display()
 
     def add_schedule(self):
         self.schedule_counter += 1
@@ -517,6 +494,8 @@ class SectionWidget(QGroupBox):
             self.parent_runner.log_message(f"[{self.section_name}] Dừng: {os.path.basename(path)}")
         if path in self.running_threads:
             del self.running_threads[path]
+
+
 
     def on_card_remove_requested(self, path):
         self.notebook_remove_requested.emit(self, [path])

@@ -32,30 +32,11 @@ def get_stylesheet():
             color: #495057;
             background-color: #ffffff;
         }
-        #LogGroup, #AvailableGroup, #ControlsGroup, #SectionGroup {
+        #LogGroup, #AvailableGroup, #ControlsGroup {
             border: 2px solid #dee2e6;
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);
         }
-        
-        #SectionGroup::title {
-            subcontrol-origin: margin;
-            subcontrol-position: top left;
-            left: -9999px; /* Hide the original title */
-        }
-        
-        #SectionTitleLabel {
-            font-size: 13pt;
-            font-weight: bold;
-            color: #0056b3;
-            padding: 5px;
-            border-bottom: 2px solid #e0e0e0;
-            margin-bottom: 5px;
-        }
-        #SectionTitleLabel:hover {
-            background-color: #e3f2fd;
-            border-radius: 5px;
-        }
-        
+                
         /* === BUTTONS === */
         QPushButton {
             font-family: "Segoe UI";

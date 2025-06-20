@@ -193,6 +193,7 @@ class NotebookRunner(QMainWindow):
         section_name = f"Section {self.section_counter}"
         section_id = f"section_{self.section_counter}"
 
+        
         section_widget = SectionWidget(section_name, section_id, self)
         section_widget.notebook_add_requested.connect(self.add_notebooks_to_section)
         section_widget.notebook_remove_requested.connect(self.remove_notebooks_from_section)
