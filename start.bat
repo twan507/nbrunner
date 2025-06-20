@@ -4,7 +4,7 @@ chcp 65001 >nul
 
 echo.
 echo ====================================
-echo  Bat dau ung dung Mini Python
+echo  Bat dau ung dung
 echo ====================================
 echo.
 

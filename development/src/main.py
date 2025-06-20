@@ -1,6 +1,9 @@
 import sys
 import os
 import queue
+# THÊM DÒNG NÀY
+from multiprocessing import freeze_support
+
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -15,6 +18,15 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtGui import QFont, QCloseEvent
+
+# Áp dụng chính sách event loop cho Windows để tương thích với ZMQ
+if sys.platform == 'win32':
+    try:
+        from asyncio import WindowsSelectorEventLoopPolicy
+        import asyncio
+        asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())
+    except ImportError:
+        pass
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__))))
 try:
@@ -43,14 +55,13 @@ class NotebookRunner(QMainWindow):
         self.set_window_icon()
         self.base_path, self.modules_path, self.notebooks_path = functions.setup_paths()
         self.output_queue = queue.Queue()
-        self.running_threads = {}
+        # Đổi tên cho rõ ràng, vì chúng ta đang dùng Process
+        self.running_processes = {}
         self.setup_ui()
         self.apply_stylesheet()
         self.queue_timer = QTimer(self)
         self.queue_timer.timeout.connect(self.check_output_queue)
         self.queue_timer.start(100)
-        # CHANGED: Loại bỏ việc đặt kích thước cửa sổ ban đầu một cách thủ công.
-        # Thay vào đó, chỉ cập nhật kích thước tối thiểu.
         self._update_window_minimum_size()
 
     def set_window_icon(self):
@@ -67,19 +78,15 @@ class NotebookRunner(QMainWindow):
         min_width, min_height = self._calculate_minimum_window_size()
         self.setMinimumSize(min_width, min_height)
 
-    # REMOVED: Hàm _update_window_size không còn cần thiết.
-
     def setup_ui(self):
         main_widget = QWidget()
         main_widget.setObjectName("MainWidget")
         self.setCentralWidget(main_widget)
         main_layout = QVBoxLayout(main_widget)
         main_layout.setContentsMargins(5, 5, 5, 5)
-
         self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.main_splitter.setObjectName("MainSplitter")
         self.main_splitter.setHandleWidth(8)
-
         self.log_group = QGroupBox("📊 Console Log")
         self.log_group.setObjectName("LogGroup")
         log_layout = QVBoxLayout(self.log_group)
@@ -96,7 +103,6 @@ class NotebookRunner(QMainWindow):
         log_layout.addWidget(clear_log_button)
         self.log_group.setMinimumWidth(config.CONSOLE_MIN_WIDTH)
         self.main_splitter.addWidget(self.log_group)
-
         self.available_container = QWidget()
         available_container_layout = QVBoxLayout(self.available_container)
         available_container_layout.setContentsMargins(0, 0, 0, 0)
@@ -116,7 +122,6 @@ class NotebookRunner(QMainWindow):
         self.available_cards_layout.setSpacing(6)
         self.available_scroll_area.setWidget(self.available_cards_widget)
         available_layout.addWidget(self.available_scroll_area)
-
         controls_group = QGroupBox("⚙️ Điều khiển")
         controls_group.setObjectName("ControlsGroup")
         controls_layout = QVBoxLayout(controls_group)
@@ -126,14 +131,10 @@ class NotebookRunner(QMainWindow):
         refresh_button.setObjectName("RefreshButton")
         refresh_button.clicked.connect(self.refresh_notebook_list)
         add_section_button = QPushButton("Thêm Section Mới")
-        
-        # FIX: Đặt một objectName riêng cho nút này
         add_section_button.setObjectName("AddSectionButton")
-
         add_section_button.clicked.connect(self.create_new_section)
         controls_layout.addWidget(refresh_button)
         controls_layout.addWidget(add_section_button)
-
         available_container_layout.addWidget(available_group)
         available_container_layout.addWidget(controls_group)
         self.available_container.setMinimumWidth(config.NOTEBOOK_LIST_MIN_WIDTH)
@@ -162,15 +163,13 @@ class NotebookRunner(QMainWindow):
 
     def refresh_notebook_list(self):
         functions.refresh_notebook_list(
-            self.notebooks_path,
-            self.available_cards_layout,
-            self.available_notebook_cards,
-            self.highlighted_available,
-            self._create_card_in_list,
+            self.notebooks_path, self.available_cards_layout, self.available_notebook_cards,
+            self.highlighted_available, self._create_card_in_list,
         )
 
     def run_notebook(self, notebook_path):
-        functions.run_notebook(notebook_path, self.running_threads, self.output_queue)
+        # Hàm này có thể để trống hoặc ghi log vì logic đã chuyển vào section
+        functions.run_notebook(notebook_path, self.running_processes, self.output_queue)
 
     def log_message(self, message):
         functions.log_message(message, self.output_queue)
@@ -182,49 +181,36 @@ class NotebookRunner(QMainWindow):
         self.output_console.clear()
 
     def closeEvent(self, a0: QCloseEvent | None) -> None:
-        if functions.handle_close_event(self.running_threads):
-            if a0:
-                a0.accept()
+        if functions.handle_close_event(self.running_processes):
+            if a0: a0.accept()
         else:
-            if a0:
-                a0.ignore()
+            if a0: a0.ignore()
 
     def create_new_section(self):
         self.section_counter += 1
         section_name = f"Section {self.section_counter}"
         section_id = f"section_{self.section_counter}"
-
         section_widget = SectionWidget(section_name, section_id, self)
-        
         section_widget.notebooks_dropped.connect(self.move_notebooks_to_section)
         section_widget.notebook_remove_requested.connect(self.remove_notebooks_from_section)
         section_widget.section_close_requested.connect(self.close_section)
-
         self.main_splitter.addWidget(section_widget)
         self.sections[section_id] = section_widget
-
-        # REMOVED: Xóa bỏ logic tự động thay đổi kích thước cửa sổ.
-        # Layout sẽ tự xử lý việc này.
         self._update_window_minimum_size()
         self.log_message(f"Đã tạo section mới: {section_name}")
 
     def move_notebooks_to_section(self, section_widget, paths_to_move):
-        """Di chuyển notebooks từ danh sách có sẵn vào một section."""
         moved_count = 0
         for path in paths_to_move:
             if path in self.available_notebook_cards:
                 old_card = self.available_notebook_cards[path]
                 description = old_card.desc_label.text()
-                
                 self.available_cards_layout.removeWidget(old_card)
                 old_card.deleteLater()
                 del self.available_notebook_cards[path]
-                
                 section_widget.add_notebook_card(path, description)
                 moved_count += 1
-
         self.highlighted_available.clear()
-        
         if moved_count > 0:
             self.log_message(f"Đã kéo thả {moved_count} notebooks vào '{section_widget.section_name}'")
 
@@ -241,21 +227,20 @@ class NotebookRunner(QMainWindow):
         section_id = section_widget.section_id
         if section_widget.notebook_cards:
             self.remove_notebooks_from_section(section_widget, list(section_widget.notebook_cards.keys()))
-
-        # REMOVED: Xóa bỏ logic tự động thay đổi kích thước cửa sổ.
-        # Layout sẽ tự xử lý việc này.
-
         section_widget.cleanup()
         section_widget.setParent(None)
         section_widget.deleteLater()
         if section_id in self.sections:
             del self.sections[section_id]
-
         self._update_window_minimum_size()
         self.log_message(f"Đã đóng section: {section_widget.section_name}")
 
 
 if __name__ == "__main__":
+    # THÊM DÒNG NÀY làm dòng đầu tiên
+    # Đây là chỉ thị bắt buộc cho multiprocessing trên Windows khi đóng gói
+    freeze_support()
+
     app = QApplication(sys.argv)
     functions.setup_application_icon(app)
     window = NotebookRunner()
@@ -265,8 +250,8 @@ if __name__ == "__main__":
             screen_geometry = screen.availableGeometry()
             window_geometry = window.frameGeometry()
             window_geometry.moveCenter(screen_geometry.center())
-            final_x = window_geometry.topLeft().x() - 300
-            final_y = window_geometry.topLeft().y() - 50
+            final_x = max(0, window_geometry.topLeft().x())
+            final_y = max(0, window_geometry.topLeft().y())
             window.move(final_x, final_y)
     except Exception as e:
         print(f"Lỗi khi định vị cửa sổ: {e}")

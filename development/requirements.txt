@@ -4,6 +4,8 @@ wheel==0.43.0
 
 # Notebook execution - Core functionality
 nbformat==5.10.0
+nbconvert==7.16.4
+ipykernel==6.29.4
 
 # Data handling - Thư viện cơ bản cho notebooks
 pandas==2.2.2
