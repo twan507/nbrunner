@@ -113,8 +113,5 @@ NOTEBOOK_LIST_MIN_WIDTH = 250
 SECTION_MIN_WIDTH = 450
 SECTION_DISPLAY_WIDTH = 450
 
-# Timer settings cho scheduled execution
-SCHEDULE_CHECK_INTERVAL = 1000  # milliseconds
-
 # Splitter ban đầu (console ẩn, chỉ có notebook list)
 SPLITTER_INITIAL_SIZES = [CONSOLE_INITIAL_WIDTH, NOTEBOOK_LIST_INITIAL_WIDTH]
