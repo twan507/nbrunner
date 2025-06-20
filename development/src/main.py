@@ -102,7 +102,7 @@ class NotebookRunner(QMainWindow):
         available_container_layout = QVBoxLayout(self.available_container)
         available_container_layout.setContentsMargins(0, 0, 0, 0)
         available_container_layout.setSpacing(10)
-        available_group = QGroupBox("📚 Notebooks có sẵn")
+        available_group = QGroupBox("📚 Kéo Notebook từ đây") # CHANGED: Cập nhật tiêu đề
         available_group.setObjectName("AvailableGroup")
         available_layout = QVBoxLayout(available_group)
         available_layout.setContentsMargins(12, 20, 12, 12)
@@ -126,7 +126,7 @@ class NotebookRunner(QMainWindow):
         refresh_button = QPushButton("🔄 Làm Mới Danh Sách")
         refresh_button.setObjectName("RefreshButton")
         refresh_button.clicked.connect(self.refresh_notebook_list)
-        add_section_button = QPushButton("➕ Thêm Section Mới")
+        add_section_button = QPushButton("➕ Thêm Section Mới (để thả vào)") # CHANGED: Cập nhật tiêu đề
         add_section_button.setObjectName("RefreshButton")
         add_section_button.clicked.connect(self.create_new_section)
         controls_layout.addWidget(refresh_button)
@@ -150,7 +150,8 @@ class NotebookRunner(QMainWindow):
 
     def _create_card_in_list(self, path, parent_layout, card_dict):
         description = functions.get_notebook_description(path)
-        card = NotebookCard(path, description)
+        # CHANGED: Truyền self (NotebookRunner instance) vào constructor của NotebookCard
+        card = NotebookCard(path, description, self)
         card.clicked.connect(self._on_card_click)
         parent_layout.addWidget(card)
         card_dict[path] = card
@@ -188,14 +189,14 @@ class NotebookRunner(QMainWindow):
                 a0.ignore()
 
     def create_new_section(self):
-        """Tạo một section mới ngay lập tức với tên mặc định."""
         self.section_counter += 1
         section_name = f"Section {self.section_counter}"
         section_id = f"section_{self.section_counter}"
 
-        
         section_widget = SectionWidget(section_name, section_id, self)
-        section_widget.notebook_add_requested.connect(self.add_notebooks_to_section)
+        
+        # CHANGED: Kết nối signal mới cho việc drop, bỏ signal cũ
+        section_widget.notebooks_dropped.connect(self.move_notebooks_to_section)
         section_widget.notebook_remove_requested.connect(self.remove_notebooks_from_section)
         section_widget.section_close_requested.connect(self.close_section)
 
@@ -208,23 +209,30 @@ class NotebookRunner(QMainWindow):
         self._update_window_minimum_size()
         self.log_message(f"Đã tạo section mới: {section_name}")
 
-    def add_notebooks_to_section(self, section_widget):
-        if not self.highlighted_available:
-            functions.show_no_notebooks_selected_message(self, "Vui lòng chọn ít nhất một notebook từ danh sách có sẵn.")
-            return
-        paths_to_move = list(self.highlighted_available)
+    # CHANGED: Đổi tên từ add_notebooks_to_section và sửa lại để nhận tham số từ drop event
+    def move_notebooks_to_section(self, section_widget, paths_to_move):
+        """Di chuyển notebooks từ danh sách có sẵn vào một section."""
         moved_count = 0
         for path in paths_to_move:
+            # Kiểm tra xem path có hợp lệ và tồn tại trong danh sách có sẵn không
             if path in self.available_notebook_cards:
                 old_card = self.available_notebook_cards[path]
                 description = old_card.desc_label.text()
+                
+                # Xóa card khỏi layout và dictionary
                 self.available_cards_layout.removeWidget(old_card)
                 old_card.deleteLater()
                 del self.available_notebook_cards[path]
+                
+                # Thêm notebook card mới vào section
                 section_widget.add_notebook_card(path, description)
                 moved_count += 1
+
+        # Xóa các lựa chọn highlight sau khi di chuyển
         self.highlighted_available.clear()
-        self.log_message(f"Đã di chuyển {moved_count} notebooks vào {section_widget.section_name}")
+        
+        if moved_count > 0:
+            self.log_message(f"Đã kéo thả {moved_count} notebooks vào '{section_widget.section_name}'")
 
     def remove_notebooks_from_section(self, section_widget, paths):
         moved_count = 0
