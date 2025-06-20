@@ -97,12 +97,48 @@ def get_stylesheet():
         QInputDialog QLineEdit {
             background-color: #ffffff; border: 2px solid #dee2e6; border-radius: 6px;
             padding: 8px; color: #2c3e50; font-size: 10pt;
-        }
-
-        /* === SCROLL & TEXT AREAS === */
+        }        /* === SCROLL & TEXT AREAS === */
         QScrollArea { border: none; background-color: transparent; }
         #AvailableScrollArea, #SectionScrollArea { border: 1px solid #e9ecef; border-radius: 8px; background-color: #ffffff; }
         #CardsContainer { background-color: #ffffff; border-radius: 6px; }
+          /* === SCROLLBAR STYLES (NO HOVER EFFECTS) === */
+        QScrollBar:vertical {
+            background-color: #f1f1f1;
+            width: 4px;
+            border-radius: 2px;
+            margin: 0px;
+        }
+        QScrollBar::handle:vertical {
+            background-color: #c1c1c1;
+            border-radius: 2px;
+            min-height: 7px;
+        }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+            background: none;
+            height: 0px;
+        }
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+            background: none;
+        }
+        
+        QScrollBar:horizontal {
+            background-color: #f1f1f1;
+            height: 4px;
+            border-radius: 2px;
+            margin: 0px;
+        }
+        QScrollBar::handle:horizontal {
+            background-color: #c1c1c1;
+            border-radius: 2px;
+            min-width: 7px;
+        }
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+            background: none;
+            width: 0px;
+        }
+        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+            background: none;
+        }
         
         /* === THAY ĐỔI Ở ĐÂY: Gộp style cho 2 console === */
         #Console, #SectionConsole {

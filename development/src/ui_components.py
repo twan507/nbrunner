@@ -205,6 +205,7 @@ class SectionNotebookCard(QFrame):
         self.log_console = QTextEdit()
         self.log_console.setReadOnly(True)
         self.log_console.setObjectName("SectionConsole")  # Tên này sẽ được style trong styles.py
+        self.log_console.setFixedHeight(80)  # Thiết lập chiều cao cố định 100px
         log_layout.addWidget(self.log_console)
         layout.addLayout(log_layout)
         layout.addStretch()
@@ -254,17 +255,23 @@ class SectionNotebookCard(QFrame):
 
     def start_timer(self):
         self.start_time = time.time()
-        self.timer.start(1000)
+        self.timer.start(10)  # Cập nhật mỗi 10ms
 
     def stop_timer(self):
         self.timer.stop()
 
     def update_timer(self):
         if self.start_time:
-            elapsed = int(time.time() - self.start_time)
-            h, r = divmod(elapsed, 3600)
-            m, s = divmod(r, 60)
-            self.timer_label.setText(f"{h:02d}:{m:02d}:{s:02d}")
+            elapsed = time.time() - self.start_time
+            total_ms = int(elapsed * 1000)  # Tổng số milliseconds
+
+            # Tính phút, giây, milliseconds
+            minutes = total_ms // 60000
+            seconds = (total_ms % 60000) // 1000
+            milliseconds = total_ms % 1000
+
+            # Định dạng mm:ss:ms (chỉ lấy 2 chữ số đầu của milliseconds)
+            self.timer_label.setText(f"{minutes:02d}:{seconds:02d}:{milliseconds // 10:02d}")
 
     def log_message(self, message):
         self.log_console.append(message)
@@ -410,6 +417,7 @@ class SectionWidget(QGroupBox):
         self.close_section_btn.clicked.connect(self.close_section)
         controls_layout.addWidget(self.close_section_btn)
 
+        
         main_layout.addWidget(notebooks_group)
         main_layout.addWidget(controls_group)
 
