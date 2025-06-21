@@ -30,7 +30,6 @@ MANIFEST
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
-*.spec
 
 # Installer logs
 pip-log.txt
@@ -180,11 +179,9 @@ cython_debug/
 development/venv/
 
 # Built Application (file exe và thư mục build)
-app/nbrunner.exe
-app/*.ico
+app/
 
 # PyInstaller temporary files
-*.spec
 build/
 dist/
 

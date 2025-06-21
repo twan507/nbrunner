@@ -20,6 +20,15 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtGui import QFont, QCloseEvent
 
+if "-f" in sys.argv:
+    # Nếu phát hiện đây là một lệnh gọi để tạo kernel,
+    # chúng ta sẽ khởi chạy kernel và thoát ngay lập tức,
+    # không chạy bất kỳ code nào liên quan đến giao diện đồ họa.
+    from ipykernel import kernelapp as app
+
+    app.launch_new_instance()
+    sys.exit()
+
 # Áp dụng chính sách event loop cho Windows để tương thích với ZMQ
 if sys.platform == "win32":
     try:
