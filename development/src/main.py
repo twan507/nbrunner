@@ -2,44 +2,66 @@ import sys
 import os
 from multiprocessing import freeze_support
 
+# Them import cho viec an console
+if sys.platform == "win32":
+    try:
+        import win32gui
+        import win32console
+    except ImportError:
+        # Neu khong co pywin32, bo qua de khong gay loi khi chay tren he dieu hanh khac
+        win32gui = None
+        win32console = None
+
+
+# Fix for zmq warning on Windows: "Proactor event loop does not implement add_reader"
+if sys.platform == "win32":
+    try:
+        from asyncio import WindowsSelectorEventLoopPolicy, set_event_loop_policy
+
+        set_event_loop_policy(WindowsSelectorEventLoopPolicy())
+    except ImportError:
+        pass
+
+
+def _hide_console_window_on_windows():
+    """
+    Tim va an cua so console cua tien trinh hien tai.
+    Chi hoat dong tren Windows va khi duoc build thanh file .exe.
+    """
+    if sys.platform == "win32" and getattr(sys, "frozen", False) and win32console and win32gui:
+        try:
+            window = win32console.GetConsoleWindow()
+            if window:
+                win32gui.ShowWindow(window, 0)  # 0 = SW_HIDE
+        except Exception as e:
+            # In ra de biet neu co loi, mac du nguoi dung se khong thay
+            print(f"Error hiding console: {e}")
+
 
 def _initialize_environment():
     """
-    Hàm quan trọng: Thiết lập các đường dẫn và môi trường cần thiết.
-    Hàm này PHẢI được chạy trước tiên cho cả ứng dụng GUI và tiến trình kernel.
+    Thiet lap cac duong dan va moi truong can thiet.
     """
-    # 1. Thêm thư mục 'modules' vào sys.path để kernel có thể import
     if getattr(sys, "frozen", False):
-        # Khi đã đóng gói, thư mục gốc là nơi chứa file .exe
         root_dir = os.path.dirname(sys.executable)
         modules_dir = os.path.join(root_dir, "modules")
     else:
-        # Khi chạy ở môi trường dev
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         modules_dir = os.path.join(project_root, "app", "modules")
 
     if os.path.exists(modules_dir) and modules_dir not in sys.path:
         sys.path.insert(0, modules_dir)
 
-    # 2. Thiết lập chính sách event loop cho Windows để tránh lỗi/warning của ZMQ
-    if sys.platform == "win32":
-        try:
-            from asyncio import WindowsSelectorEventLoopPolicy, set_event_loop_policy
-
-            set_event_loop_policy(WindowsSelectorEventLoopPolicy())
-        except ImportError:
-            pass
-
 
 def _launch_kernel():
-    """Hàm riêng biệt chỉ để khởi chạy kernel khi được gọi với cờ -f."""
+    """Ham rieng biet chi de khoi chay kernel."""
     from ipykernel import kernelapp as app
 
     app.launch_new_instance()
 
 
 def main():
-    """Hàm chính để chạy ứng dụng GUI."""
+    """Ham chinh de chay ung dung GUI."""
     import queue
     from PyQt6.QtWidgets import (
         QApplication,
@@ -50,19 +72,18 @@ def main():
         QTextEdit,
         QScrollArea,
         QGroupBox,
-        QMessageBox,
         QSplitter,
     )
     from PyQt6.QtCore import QTimer, Qt
     from PyQt6.QtGui import QFont, QCloseEvent
 
     sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__))))
-    # Các import của dự án nên nằm trong hàm main để không ảnh hưởng kernel
     import config
     import functions
     import styles
     from ui_components import NotebookCard, SectionWidget
 
+    # --- Lop NotebookRunner va cac phuong thuc giu nguyen ---
     class NotebookRunner(QMainWindow):
         def __init__(self):
             super().__init__()
@@ -276,9 +297,14 @@ def main():
 
 if __name__ == "__main__":
     freeze_support()
-    _initialize_environment()  # Luôn chạy hàm thiết lập môi trường đầu tiên
+
+    # *** THAY DOI QUAN TRONG NHAT O DAY ***
+    # An cua so console di ngay khi ung dung .exe khoi dong
+    _hide_console_window_on_windows()
+
+    _initialize_environment()
 
     if "-f" in sys.argv:
-        _launch_kernel()  # Chế độ kernel
+        _launch_kernel()
     else:
-        main()  # Chế độ GUI
+        main()

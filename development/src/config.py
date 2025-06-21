@@ -25,8 +25,8 @@ if getattr(sys, "frozen", False):
     MODULES_DIR = os.path.join(ROOT_DIR, "modules")
     NOTEBOOKS_DIR = os.path.join(ROOT_DIR, "notebooks")
 else:
-    MODULES_DIR = os.path.join(ROOT_DIR, "app", "modules")
-    NOTEBOOKS_DIR = os.path.join(ROOT_DIR, "app", "notebooks")
+    MODULES_DIR = os.path.join(ROOT_DIR, "resources", "modules")
+    NOTEBOOKS_DIR = os.path.join(ROOT_DIR, "resources", "notebooks")
 
 APP_BUILD_DIR = os.path.join(ROOT_DIR, "app")
 

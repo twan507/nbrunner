@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QTextEdit,
     QTimeEdit,
     QSizePolicy,
+    QMessageBox,
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QTime, QMimeData
 from PyQt6.QtGui import QFont, QMouseEvent, QDrag, QDropEvent, QDragEnterEvent
@@ -340,17 +341,21 @@ class SectionWidget(QWidget):
         self.setup_ui()
 
     def dragEnterEvent(self, a0: QDragEnterEvent | None) -> None:
-        if a0 and a0.mimeData() and a0.mimeData().hasText():
-            a0.acceptProposedAction()
-        elif a0:
-            a0.ignore()
+        if a0:
+            mime_data = a0.mimeData()
+            if mime_data and mime_data.hasText():
+                a0.acceptProposedAction()
+            else:
+                a0.ignore()
 
     def dropEvent(self, a0: QDropEvent | None) -> None:
-        if a0 and a0.mimeData() and a0.mimeData().hasText():
-            self.notebooks_dropped.emit(self, a0.mimeData().text().split("\n"))
-            a0.acceptProposedAction()
-        elif a0:
-            a0.ignore()
+        if a0:
+            mime_data = a0.mimeData()
+            if mime_data and mime_data.hasText():
+                self.notebooks_dropped.emit(self, mime_data.text().split("\n"))
+                a0.acceptProposedAction()
+            else:
+                a0.ignore()
 
     def setup_ui(self):
         main_layout = QVBoxLayout(self)
@@ -580,9 +585,13 @@ class SectionWidget(QWidget):
         if self.parent_runner:
             self.parent_runner.log_message(f"[{self.section_name}] Bắt đầu chạy lần lượt...")
 
-        ordered_cards = [
-            self.cards_layout.itemAt(i).widget() for i in range(self.cards_layout.count()) if self.cards_layout.itemAt(i).widget()
-        ]
+        ordered_cards = []
+        for i in range(self.cards_layout.count()):
+            item = self.cards_layout.itemAt(i)
+            if item:
+                widget = item.widget()
+                if isinstance(widget, SectionNotebookCard):
+                    ordered_cards.append(widget)
 
         for card in ordered_cards:
             if not self.is_sequence_running:
@@ -614,7 +623,15 @@ class SectionWidget(QWidget):
                 self.on_card_stop_requested(path)
 
     def close_section(self):
-        if functions.confirm_section_close(self, self.section_name, len(self.notebook_cards)):
+        reply = QMessageBox.question(
+            self,
+            "Xác nhận đóng Section",
+            f"Bạn có chắc muốn đóng section '{self.section_name}' không? "
+            f"Có {len(self.notebook_cards)} notebook(s) sẽ được trả về danh sách.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
             self.stop_all_notebooks()
             self.section_close_requested.emit(self)
 
