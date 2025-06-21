@@ -87,8 +87,6 @@ pyinstaller ^
     --name "%APP_NAME%" ^
     %ICON_ARG% ^
     %ICON_DATA_ARG% ^
-    --add-data "app\modules;modules" ^
-    --add-data "app\notebooks;notebooks" ^
     --clean ^
     %PYINSTALLER_EXTRA_ARGS_STR%
 

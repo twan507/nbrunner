@@ -1,6 +1,7 @@
 import sys
 import os
 import queue
+
 # THÊM DÒNG NÀY
 from multiprocessing import freeze_support
 
@@ -20,10 +21,11 @@ from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtGui import QFont, QCloseEvent
 
 # Áp dụng chính sách event loop cho Windows để tương thích với ZMQ
-if sys.platform == 'win32':
+if sys.platform == "win32":
     try:
         from asyncio import WindowsSelectorEventLoopPolicy
         import asyncio
+
         asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())
     except ImportError:
         pass
@@ -107,7 +109,7 @@ class NotebookRunner(QMainWindow):
         available_container_layout = QVBoxLayout(self.available_container)
         available_container_layout.setContentsMargins(0, 0, 0, 0)
         available_container_layout.setSpacing(10)
-        available_group = QGroupBox("📚 Danh sách Notebooks") 
+        available_group = QGroupBox("📚 Danh sách Notebooks")
         available_group.setObjectName("AvailableGroup")
         available_layout = QVBoxLayout(available_group)
         available_layout.setContentsMargins(5, 10, 5, 5)
@@ -163,8 +165,11 @@ class NotebookRunner(QMainWindow):
 
     def refresh_notebook_list(self):
         functions.refresh_notebook_list(
-            self.notebooks_path, self.available_cards_layout, self.available_notebook_cards,
-            self.highlighted_available, self._create_card_in_list,
+            self.notebooks_path,
+            self.available_cards_layout,
+            self.available_notebook_cards,
+            self.highlighted_available,
+            self._create_card_in_list,
         )
 
     def run_notebook(self, notebook_path):
@@ -182,9 +187,11 @@ class NotebookRunner(QMainWindow):
 
     def closeEvent(self, a0: QCloseEvent | None) -> None:
         if functions.handle_close_event(self.running_processes):
-            if a0: a0.accept()
+            if a0:
+                a0.accept()
         else:
-            if a0: a0.ignore()
+            if a0:
+                a0.ignore()
 
     def create_new_section(self):
         self.section_counter += 1
