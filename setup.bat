@@ -1,5 +1,5 @@
 @echo off
-REM setup.bat - Thiet lap moi truong ao va cai dat thu vien
+REM setup.bat - Thiet lap moi truong ao, cai dat thu vien, va dang ky kernel voi Jupyter
 
 echo.
 echo ====================================
@@ -46,6 +46,21 @@ if %errorlevel% neq 0 (
     goto :deactivate_and_end
 )
 echo Da cai dat tat ca thu vien thanh cong.
+
+REM ========================================================================
+REM == BUOC QUAN TRONG NHAT DE SUA LOI "KERNEL DIED" TRONG MOI TRUONG DEV ==
+REM ========================================================================
+echo.
+echo Dang ky moi truong ao nay voi Jupyter...
+REM Lenh nay se tao mot kernel ten la "nbrunner-venv" ma nbconvert co the tim thay
+python -m ipykernel install --user --name=nbrunner-venv --display-name="Python (NBRunner Project)"
+if %errorlevel% neq 0 (
+    echo Loi: Khong the dang ky kernel voi Jupyter.
+    goto :deactivate_and_end
+)
+echo Da dang ky kernel 'nbrunner-venv' thanh cong.
+echo.
+REM ========================================================================
 
 echo.
 echo ==========================================

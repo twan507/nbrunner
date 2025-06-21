@@ -27,9 +27,6 @@ import config
 import functions
 
 
-# --- CÁC CLASS UI (KHÔNG THAY ĐỔI TRỪ PHẦN SỬA LỖI) ---
-
-
 class ClickableLabel(QLabel):
     doubleClicked = pyqtSignal()
 
@@ -133,7 +130,6 @@ class SectionNotebookCard(QFrame):
         self.log_queue = None
         self.setup_ui()
 
-    # setup_ui không đổi
     def setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
@@ -225,7 +221,6 @@ class SectionNotebookCard(QFrame):
     def stop_notebook(self):
         self.set_status("stopping")
         self.stop_btn.setEnabled(False)
-        # SỬA LỖI: Chủ động dừng listener ngay khi nhấn nút Dừng
         self.stop_log_listener()
         self.stop_requested.emit(self.path)
 
@@ -242,10 +237,9 @@ class SectionNotebookCard(QFrame):
         self.set_status("success" if success else "error")
         self.stop_elapsed_timer()
         self.run_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)  # Nút dừng bị vô hiệu hóa khi đã kết thúc
+        self.stop_btn.setEnabled(False)
         self.mode_combo.setEnabled(True)
         self.count_spin.setEnabled(True)
-        # SỬA LỖI: Đảm bảo dừng listener khi quá trình thực thi kết thúc
         self.stop_log_listener()
 
     def set_status(self, status, message=None):
@@ -274,16 +268,11 @@ class SectionNotebookCard(QFrame):
 
     def update_elapsed_timer(self):
         if self.start_time:
-            # Sửa ở đây: thay đổi hoàn toàn logic tính toán và định dạng
             elapsed = time.time() - self.start_time
-
-            # Tính toán dựa trên mili giây
             total_ms = int(elapsed * 1000)
             minutes = total_ms // 60000
             seconds = (total_ms % 60000) // 1000
-            hundredths = (total_ms % 1000) // 10  # Lấy 2 chữ số của mili giây
-
-            # Cập nhật label với định dạng mới mm:ss:msms
+            hundredths = (total_ms % 1000) // 10
             self.timer_label.setText(f"{minutes:02d}:{seconds:02d}:{hundredths:02d}")
 
     def start_log_listener(self, queue):
@@ -293,23 +282,12 @@ class SectionNotebookCard(QFrame):
 
     def stop_log_listener(self):
         self.log_queue_timer.stop()
-        self.log_queue = None  # Quan trọng: đặt lại là None để tránh lỗi
+        self.log_queue = None
 
     def process_log_queue(self):
-        """
-        Xử lý các thông điệp từ log queue.
-        Phiên bản cuối cùng, cực kỳ an toàn để chống lỗi race condition.
-        """
-        # GIẢI PHÁP CUỐI CÙNG - Chống Race Condition
-        # 1. Sao chép queue vào một biến cục bộ để đảm bảo nó không bị thay đổi
-        # trong lúc hàm đang chạy.
         local_queue = self.log_queue
-
-        # 2. Kiểm tra biến cục bộ. Nếu nó là None, thoát ngay lập tức.
         if local_queue is None:
             return
-
-        # 3. Mọi thao tác sau đó đều dùng 'local_queue', không dùng 'self.log_queue'
         while not local_queue.empty():
             try:
                 message = local_queue.get_nowait()
@@ -324,7 +302,6 @@ class SectionNotebookCard(QFrame):
                 else:
                     self.log_message(str(message))
             except Exception:
-                # Bỏ qua lỗi nếu queue bị đóng/trống giữa chừng để tăng độ ổn định
                 pass
 
     def _process_notebook_outputs(self, nb_object):
@@ -363,27 +340,17 @@ class SectionWidget(QWidget):
         self.setup_ui()
 
     def dragEnterEvent(self, a0: QDragEnterEvent | None) -> None:
-        if a0:
-            mime_data = a0.mimeData()
-            if mime_data and mime_data.hasText():
-                a0.acceptProposedAction()
-            else:
-                a0.ignore()
-        else:
-            if a0:
-                a0.ignore()
+        if a0 and a0.mimeData() and a0.mimeData().hasText():
+            a0.acceptProposedAction()
+        elif a0:
+            a0.ignore()
 
     def dropEvent(self, a0: QDropEvent | None) -> None:
-        if a0:
-            mime_data = a0.mimeData()
-            if mime_data and mime_data.hasText():
-                self.notebooks_dropped.emit(self, mime_data.text().split("\n"))
-                a0.acceptProposedAction()
-            else:
-                a0.ignore()
-        else:
-            if a0:
-                a0.ignore()
+        if a0 and a0.mimeData() and a0.mimeData().hasText():
+            self.notebooks_dropped.emit(self, a0.mimeData().text().split("\n"))
+            a0.acceptProposedAction()
+        elif a0:
+            a0.ignore()
 
     def setup_ui(self):
         main_layout = QVBoxLayout(self)
@@ -575,9 +542,17 @@ class SectionWidget(QWidget):
         pass
 
     def run_notebook(self, card):
+        """Hàm này đã được cập nhật để truyền thêm modules_path."""
         if self.parent_runner:
+            # Lấy modules_path từ parent_runner và truyền vào
+            modules_path = self.parent_runner.modules_path
             functions.run_notebook_with_individual_logging(
-                card.path, self.running_processes, card, card.execution_mode, card.execution_count
+                card.path,
+                self.running_processes,
+                card,
+                card.execution_mode,
+                card.execution_count,
+                modules_path,  # Đây là tham số mới
             )
 
     def run_all_simultaneously(self):
@@ -604,13 +579,13 @@ class SectionWidget(QWidget):
         self.run_sequential_btn.setEnabled(False)
         if self.parent_runner:
             self.parent_runner.log_message(f"[{self.section_name}] Bắt đầu chạy lần lượt...")
-        ordered_cards = []
-        for i in range(self.cards_layout.count()):
-            item = self.cards_layout.itemAt(i)
-            if item and isinstance(item.widget(), SectionNotebookCard):
-                ordered_cards.append(item.widget())
+
+        ordered_cards = [
+            self.cards_layout.itemAt(i).widget() for i in range(self.cards_layout.count()) if self.cards_layout.itemAt(i).widget()
+        ]
+
         for card in ordered_cards:
-            if self.is_sequence_running is False:  # Cho phép dừng chuỗi tuần tự
+            if not self.is_sequence_running:
                 if self.parent_runner:
                     self.parent_runner.log_message(f"[{self.section_name}] Chuỗi tuần tự đã bị dừng.")
                 break
@@ -623,6 +598,7 @@ class SectionWidget(QWidget):
                 proc_info["process"].join()
                 if card.path in self.running_processes:
                     del self.running_processes[card.path]
+
         if self.parent_runner:
             self.parent_runner.log_message(f"[{self.section_name}] Đã hoàn thành chạy lần lượt.")
         self.is_sequence_running = False
@@ -630,9 +606,7 @@ class SectionWidget(QWidget):
         self.run_sequential_btn.setEnabled(True)
 
     def stop_all_notebooks(self):
-        # Dừng cả chuỗi tuần tự nếu đang chạy
         self.is_sequence_running = False
-
         if any(p["process"].is_alive() for p in self.running_processes.values()):
             if self.parent_runner:
                 self.parent_runner.log_message(f"[{self.section_name}] Dừng tất cả...")

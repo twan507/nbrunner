@@ -9,21 +9,17 @@ import time
 import nbformat
 from multiprocessing import Process, Queue, Event
 
-from PyQt6.QtWidgets import QMessageBox, QApplication, QInputDialog
+from PyQt6.QtWidgets import QMessageBox, QApplication
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon
 
 from nbconvert.preprocessors import ExecutePreprocessor
-
-# SỬA LỖI 1: Sửa đường dẫn import cho CellExecutionError
 from nbclient.exceptions import CellExecutionError
 
 import config
 
 
 # --- CÁC HÀM TIỆN ÍCH (KHÔNG THAY ĐỔI) ---
-
-
 def get_resource_path(relative_path):
     if getattr(sys, "frozen", False):
         base_path = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
@@ -43,27 +39,6 @@ def setup_window_icon(window):
 def setup_application_icon(app):
     if hasattr(config, "ICON_PATH") and os.path.exists(config.ICON_PATH):
         app.setWindowIcon(QIcon(config.ICON_PATH))
-
-
-def create_section_dialog(parent, default_name):
-    section_name, ok = QInputDialog.getText(parent, "Tạo Section Mới", "Nhập tên cho section:", text=default_name)
-    if ok and section_name.strip():
-        return section_name.strip()
-    return None
-
-
-def confirm_section_close(parent, section_name, notebook_count):
-    if notebook_count > 0:
-        reply = QMessageBox.question(
-            parent,
-            "Xác Nhận Đóng Section",
-            f"Section '{section_name}' có {notebook_count} notebooks. "
-            "Các notebooks sẽ được trả về danh sách tổng. Bạn có chắc chắn muốn đóng?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        return reply == QMessageBox.StandardButton.Yes
-    return True
 
 
 def handle_card_click(path, available_notebook_cards, highlighted_available):
@@ -149,13 +124,6 @@ def handle_close_event(running_threads):
     return True
 
 
-def setup_paths():
-    base_path, modules_path, notebooks_path = config.ROOT_DIR, config.MODULES_DIR, config.NOTEBOOKS_DIR
-    if os.path.exists(modules_path) and modules_path not in sys.path:
-        sys.path.insert(0, modules_path)
-    return base_path, modules_path, notebooks_path
-
-
 def get_notebook_description(path):
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -170,20 +138,13 @@ def get_notebook_description(path):
         return "Không thể đọc mô tả."
 
 
-# SỬA LỖI 3: Thêm lại hàm này để main.py không báo lỗi,
-# mặc dù nó không còn được sử dụng trong logic chính của các section
-def run_notebook(notebook_path, running_threads, output_queue):
-    """Chạy một notebook (phiên bản cũ cho console log)."""
-    log_message("Lệnh `run_notebook` không còn được hỗ trợ trong logic Section. Sử dụng các nút trong Section.", output_queue)
+# --- LÕI THỰC THI NOTEBOOK (PHƯƠNG PHÁP TIÊM CODE) ---
 
 
-# --- LÕI THỰC THI NOTEBOOK (SỬA LỖI VÀ HOÀN THIỆN) ---
-
-
-def _execute_notebook_process(notebook_path, log_queue, stop_event, execution_mode, execution_count):
+def _execute_notebook_process(notebook_path, log_queue, stop_event, execution_mode, execution_count, modules_path):
     """
-    Hàm này chạy trong một tiến trình (Process) riêng biệt để thực thi notebook.
-    Điều này đảm bảo an toàn và cho phép dừng tiến trình một cách triệt để.
+    Hàm này chạy trong một tiến trình riêng.
+    Nó sẽ "tiêm" một cell code vào đầu notebook để thiết lập môi trường.
     """
     notebook_name = os.path.basename(notebook_path)
     notebook_dir = os.path.dirname(notebook_path)
@@ -191,29 +152,47 @@ def _execute_notebook_process(notebook_path, log_queue, stop_event, execution_mo
     def log(message):
         log_queue.put(message)
 
+    # Chuẩn bị code để tiêm vào notebook
+    # Dùng repr() để xử lý các dấu gạch chéo ngược trên Windows một cách an toàn
+    code_to_inject = f"""
+import sys
+import os
+# Thêm đường dẫn modules tùy chỉnh
+modules_path = {repr(modules_path)}
+if os.path.exists(modules_path) and modules_path not in sys.path:
+    sys.path.insert(0, modules_path)
+    print(f"NBRunner: Added '{{modules_path}}' to path.")
+"""
+
     def run_single_notebook():
-        """Thực thi notebook một lần duy nhất bằng ExecutePreprocessor."""
         nb = None
         try:
             with open(notebook_path, "r", encoding="utf-8") as f:
                 nb = nbformat.read(f, as_version=4)
 
-            # SỬA LỖI: Bỏ tham số kernel_name='python3'
-            # Để nbconvert tự động sử dụng kernel của môi trường hiện tại.
-            ep = ExecutePreprocessor(timeout=3600)
+            # Tiêm code vào đầu notebook
+            injected_cell = nbformat.v4.new_code_cell(code_to_inject)
+            nb.cells.insert(0, injected_cell)
+
+            # Sử dụng kernel đã đăng ký trong môi trường dev
+            kernel_name = "nbrunner-venv"
+
+            ep = ExecutePreprocessor(timeout=3600, kernel_name=kernel_name)
 
             log(f"Bắt đầu thực thi '{notebook_name}'...")
             ep.preprocess(nb, {"metadata": {"path": notebook_dir}})
             log(f"'{notebook_name}' đã thực thi thành công.")
             return True, nb
-        except CellExecutionError:
+        except CellExecutionError as e:
             log(f"LỖI: '{notebook_name}' thất bại tại một cell.")
+            log(f"Error Type: {e.ename}")
+            log(f"Error Value: {e.evalue}")
             return False, nb
         except Exception as e:
-            log(f"LỖI KHÔNG MONG MUỐN khi chạy '{notebook_name}': {e}\n{traceback.format_exc()}")
+            log(f"LỖI KHÔNG MONG MUỐN khi chạy '{notebook_name}': {e}\\n{traceback.format_exc()}")
             return False, nb
 
-    # Vòng lặp điều khiển dựa trên chế độ chạy
+    # Vòng lặp điều khiển không thay đổi
     if execution_mode == "continuous":
         iteration = 1
         while not stop_event.is_set():
@@ -225,8 +204,6 @@ def _execute_notebook_process(notebook_path, log_queue, stop_event, execution_mo
                 log_queue.put(("finished", False))
                 return
             iteration += 1
-            # ĐÃ XÓA 2 DÒNG time.sleep(1) VÀ log TẠI ĐÂY
-
     else:  # Chế độ "count"
         for i in range(execution_count):
             if stop_event.is_set():
@@ -239,11 +216,11 @@ def _execute_notebook_process(notebook_path, log_queue, stop_event, execution_mo
             if not success:
                 log_queue.put(("finished", False))
                 return
-
     log_queue.put(("finished", True))
 
 
-def run_notebook_with_individual_logging(notebook_path, running_processes, card, execution_mode, execution_count):
+def run_notebook_with_individual_logging(notebook_path, running_processes, card, execution_mode, execution_count, modules_path):
+    """Hàm này đã được cập nhật để nhận thêm modules_path."""
     if notebook_path in running_processes:
         if card:
             card.log_message(f"Notebook đã đang chạy: {os.path.basename(notebook_path)}")
@@ -251,9 +228,11 @@ def run_notebook_with_individual_logging(notebook_path, running_processes, card,
 
     log_queue = Queue()
     stop_event = Event()
-    process = Process(
-        target=_execute_notebook_process, args=(notebook_path, log_queue, stop_event, execution_mode, execution_count), daemon=True
-    )
+
+    # Truyền modules_path vào tiến trình con
+    process_args = (notebook_path, log_queue, stop_event, execution_mode, execution_count, modules_path)
+    process = Process(target=_execute_notebook_process, args=process_args, daemon=True)
+
     running_processes[notebook_path] = {"process": process, "stop_event": stop_event, "queue": log_queue}
 
     if card:
