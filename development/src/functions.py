@@ -97,18 +97,15 @@ def refresh_notebook_list(notebooks_path, available_cards_layout, available_note
         available_cards_layout.addWidget(QLabel(f"Lỗi: {e}"))
 
 
-def log_message(message, output_queue):
+def log_message(message):
+    """Ghi log ra cmd hệ thống thay vì GUI console."""
     timestamp = time.strftime("%H:%M:%S")
-    output_queue.put(f"[{timestamp}] {message}")
+    print(f"[{timestamp}] {message}")
 
 
 def check_output_queue(output_queue, output_console):
-    while not output_queue.empty():
-        message = output_queue.get_nowait()
-        output_console.append(message)
-        scrollbar = output_console.verticalScrollBar()
-        if scrollbar:
-            scrollbar.setValue(scrollbar.maximum())
+    """Hàm này đã được deprecated - không sử dụng nữa."""
+    pass
 
 
 def handle_close_event(running_threads):

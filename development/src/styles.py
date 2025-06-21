@@ -1,5 +1,6 @@
 # Nội dung mới cho file: development/src/styles.py
 
+
 def get_stylesheet():
     """Trả về stylesheet CSS đã được tổ chức lại cho ứng dụng"""
     return """
@@ -201,8 +202,35 @@ def get_stylesheet():
         #StopButton:disabled { background: #6c757d; }
 
         #RemoveButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #dc3545, stop:1 #c82333); }
-        #RemoveButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e4606d, stop:1 #dc3545); }
-
-        #ClearLogButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6f42c1, stop:1 #5a32a3); }
+        #RemoveButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e4606d, stop:1 #dc3545); }        #ClearLogButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6f42c1, stop:1 #5a32a3); }
         #ClearLogButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #8a63d2, stop:1 #6f42c1); }
+
+        /* === DIALOG & MESSAGE BOX === */
+        QMessageBox {
+            background-color: #ffffff;
+            color: #2c3e50;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+        }
+        QMessageBox QLabel {
+            background-color: transparent;
+            color: #2c3e50;
+            font-family: "Segoe UI";
+            font-size: 10pt;
+        }
+        QMessageBox QPushButton {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #007bff, stop:1 #0056b3);
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-weight: 500;
+            min-width: 60px;
+        }
+        QMessageBox QPushButton:hover {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0056b3, stop:1 #004085);
+        }
+        QMessageBox QPushButton:pressed {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #004085, stop:1 #002752);
+        }
     """

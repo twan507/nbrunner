@@ -180,6 +180,7 @@ development/venv/
 
 # Built Application (file exe và thư mục build)
 app/
+resources/output/*
 
 # PyInstaller temporary files
 build/

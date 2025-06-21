@@ -50,10 +50,12 @@ if exist "dist\%APP_NAME%" (
 	goto :deactivate_and_end
 )
 
-REM Sao chep thu muc notebooks va modules vao thu muc app
-echo Sao chep 'notebooks' va 'modules'...
-xcopy /E /I /Y /Q "resources\notebooks" "%APP_BUILD_DIR%\notebooks\"
+REM Sao chep thu muc data, modules, notebooks va tao thu muc output vao thu muc app
+echo Sao chep 'data', 'modules', 'notebooks' va tao thu muc 'output'...
+xcopy /E /I /Y /Q "resources\data" "%APP_BUILD_DIR%\data\"
 xcopy /E /I /Y /Q "resources\modules" "%APP_BUILD_DIR%\modules\"
+xcopy /E /I /Y /Q "resources\notebooks" "%APP_BUILD_DIR%\notebooks\"
+mkdir "%APP_BUILD_DIR%\output" >nul 2>&1
 
 
 REM Don dep cac file va thu muc tam

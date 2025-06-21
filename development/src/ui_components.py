@@ -457,7 +457,7 @@ class SectionWidget(QWidget):
         self.schedules.append({"id": schedule_id, "action_key": action_key, "action_text": action_text, "time": schedule_time})
         self.update_schedule_display()
         if self.parent_runner:
-            self.parent_runner.log_message(f"[{self.section_name}] Đã thêm lịch hẹn: '{action_text}' lúc {schedule_time.toString('HH:mm')}")
+            functions.log_message(f"[{self.section_name}] Đã thêm lịch hẹn: '{action_text}' lúc {schedule_time.toString('HH:mm')}")
 
     def remove_schedule(self, schedule_id):
         self.schedules = [s for s in self.schedules if s["id"] != schedule_id]
@@ -496,7 +496,7 @@ class SectionWidget(QWidget):
                 if hasattr(self, schedule["action_key"]):
                     getattr(self, schedule["action_key"])()
                 if self.parent_runner:
-                    self.parent_runner.log_message(f"[{self.section_name}] Thực thi hẹn giờ: {schedule['action_text']}")
+                    functions.log_message(f"[{self.section_name}] Thực thi hẹn giờ: {schedule['action_text']}")
                 executed_ids.append(schedule["id"])
         if executed_ids:
             self.schedules = [s for s in self.schedules if s["id"] not in executed_ids]
@@ -524,7 +524,7 @@ class SectionWidget(QWidget):
 
     def on_card_stop_requested(self, path):
         if self.parent_runner:
-            self.parent_runner.log_message(f"[{self.section_name}] Gửi tín hiệu dừng: {os.path.basename(path)}")
+            functions.log_message(f"[{self.section_name}] Gửi tín hiệu dừng: {os.path.basename(path)}")
         if path in self.running_processes:
             proc_info = self.running_processes[path]
             proc_info["stop_event"].set()
@@ -532,7 +532,7 @@ class SectionWidget(QWidget):
             if proc_info["process"].is_alive():
                 proc_info["process"].terminate()
                 if self.parent_runner:
-                    self.parent_runner.log_message(f"[{self.section_name}] Buộc dừng: {os.path.basename(path)}")
+                    functions.log_message(f"[{self.section_name}] Buộc dừng: {os.path.basename(path)}")
             card = self.notebook_cards.get(path)
             if card:
                 card.on_execution_finished(success=False)
@@ -564,7 +564,7 @@ class SectionWidget(QWidget):
         if not self.notebook_cards:
             return
         if self.parent_runner:
-            self.parent_runner.log_message(f"[{self.section_name}] Bắt đầu chạy đồng thời...")
+            functions.log_message(f"[{self.section_name}] Bắt đầu chạy đồng thời...")
         for card in self.notebook_cards.values():
             if card.path not in self.running_processes:
                 card.run_notebook()
@@ -572,7 +572,7 @@ class SectionWidget(QWidget):
     def run_all_sequential_wrapper(self):
         if self.is_sequence_running:
             if self.parent_runner:
-                self.parent_runner.log_message(f"[{self.section_name}] Một chuỗi tuần tự đã đang chạy.")
+                functions.log_message(f"[{self.section_name}] Một chuỗi tuần tự đã đang chạy.")
             return
         threading.Thread(target=self._run_all_sequential_task, daemon=True).start()
 
@@ -583,7 +583,7 @@ class SectionWidget(QWidget):
         self.run_all_btn.setEnabled(False)
         self.run_sequential_btn.setEnabled(False)
         if self.parent_runner:
-            self.parent_runner.log_message(f"[{self.section_name}] Bắt đầu chạy lần lượt...")
+            functions.log_message(f"[{self.section_name}] Bắt đầu chạy lần lượt...")
 
         ordered_cards = []
         for i in range(self.cards_layout.count()):
@@ -596,7 +596,7 @@ class SectionWidget(QWidget):
         for card in ordered_cards:
             if not self.is_sequence_running:
                 if self.parent_runner:
-                    self.parent_runner.log_message(f"[{self.section_name}] Chuỗi tuần tự đã bị dừng.")
+                    functions.log_message(f"[{self.section_name}] Chuỗi tuần tự đã bị dừng.")
                 break
             if card.path in self.running_processes:
                 continue
@@ -609,7 +609,7 @@ class SectionWidget(QWidget):
                     del self.running_processes[card.path]
 
         if self.parent_runner:
-            self.parent_runner.log_message(f"[{self.section_name}] Đã hoàn thành chạy lần lượt.")
+            functions.log_message(f"[{self.section_name}] Đã hoàn thành chạy lần lượt.")
         self.is_sequence_running = False
         self.run_all_btn.setEnabled(True)
         self.run_sequential_btn.setEnabled(True)
@@ -618,7 +618,7 @@ class SectionWidget(QWidget):
         self.is_sequence_running = False
         if any(p["process"].is_alive() for p in self.running_processes.values()):
             if self.parent_runner:
-                self.parent_runner.log_message(f"[{self.section_name}] Dừng tất cả...")
+                functions.log_message(f"[{self.section_name}] Dừng tất cả...")
             for path in list(self.running_processes.keys()):
                 self.on_card_stop_requested(path)
 

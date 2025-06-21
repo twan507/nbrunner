@@ -62,20 +62,18 @@ def _launch_kernel():
 
 def main():
     """Ham chinh de chay ung dung GUI."""
-    import queue
     from PyQt6.QtWidgets import (
         QApplication,
         QMainWindow,
         QWidget,
         QVBoxLayout,
         QPushButton,
-        QTextEdit,
         QScrollArea,
         QGroupBox,
         QSplitter,
     )
-    from PyQt6.QtCore import QTimer, Qt
-    from PyQt6.QtGui import QFont, QCloseEvent
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtGui import QCloseEvent
 
     sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__))))
     import config
@@ -96,20 +94,16 @@ def main():
             self.section_counter = 0
             self.available_container = None
             self.set_window_icon()
-            self.output_queue = queue.Queue()
             self.running_processes = {}
             self.setup_ui()
             self.apply_stylesheet()
-            self.queue_timer = QTimer(self)
-            self.queue_timer.timeout.connect(self.check_output_queue)
-            self.queue_timer.start(100)
             self._update_window_minimum_size()
 
         def set_window_icon(self):
             functions.setup_window_icon(self)
 
         def _calculate_minimum_window_size(self):
-            min_width = config.NOTEBOOK_LIST_MIN_WIDTH + config.CONSOLE_MIN_WIDTH
+            min_width = config.NOTEBOOK_LIST_MIN_WIDTH
             min_height = config.WINDOW_MIN_HEIGHT
             if hasattr(self, "sections"):
                 min_width += len(self.sections) * config.SECTION_MIN_WIDTH
@@ -128,22 +122,8 @@ def main():
             self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
             self.main_splitter.setObjectName("MainSplitter")
             self.main_splitter.setHandleWidth(8)
-            self.log_group = QGroupBox("📊 Console Log")
-            self.log_group.setObjectName("LogGroup")
-            log_layout = QVBoxLayout(self.log_group)
-            log_layout.setSpacing(8)
-            log_layout.setContentsMargins(5, 10, 5, 5)
-            self.output_console = QTextEdit()
-            self.output_console.setReadOnly(True)
-            self.output_console.setFont(QFont("JetBrains Mono", 9))
-            self.output_console.setObjectName("Console")
-            clear_log_button = QPushButton("Xóa Console")
-            clear_log_button.setObjectName("ClearButton")
-            clear_log_button.clicked.connect(self.clear_console)
-            log_layout.addWidget(self.output_console)
-            log_layout.addWidget(clear_log_button)
-            self.log_group.setMinimumWidth(config.CONSOLE_MIN_WIDTH)
-            self.main_splitter.addWidget(self.log_group)
+
+            # Loại bỏ log_group - chỉ giữ lại available_container
             self.available_container = QWidget()
             available_container_layout = QVBoxLayout(self.available_container)
             available_container_layout.setContentsMargins(0, 0, 0, 0)
@@ -182,12 +162,14 @@ def main():
             self.main_splitter.addWidget(self.available_container)
             self.main_splitter.setSizes(config.SPLITTER_INITIAL_SIZES)
             self.main_splitter.setStretchFactor(0, 1)
-            self.main_splitter.setStretchFactor(1, 1)
             main_layout.addWidget(self.main_splitter)
             self.refresh_notebook_list()
             self._update_window_minimum_size()
             self.update()
             QApplication.processEvents()
+
+            # Tự động tạo section đầu tiên
+            self.create_new_section()
 
         def apply_stylesheet(self):
             self.setStyleSheet(styles.get_stylesheet())
@@ -212,13 +194,15 @@ def main():
             )
 
         def log_message(self, message):
-            functions.log_message(message, self.output_queue)
+            functions.log_message(message)
 
         def check_output_queue(self):
-            functions.check_output_queue(self.output_queue, self.output_console)
+            # Hàm này đã được deprecated - không sử dụng nữa
+            pass
 
         def clear_console(self):
-            self.output_console.clear()
+            # Hàm này đã được deprecated - không sử dụng nữa
+            pass
 
         def closeEvent(self, a0: QCloseEvent | None) -> None:
             if functions.handle_close_event(self.running_processes):
