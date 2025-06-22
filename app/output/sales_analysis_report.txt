@@ -1,8 +1,8 @@
 BÁO CÁO TỔNG HỢP
-Thời gian tạo: 2025-06-22 12:50:31
+Thời gian tạo: 2025-06-22 13:33:11
 ==================================================
 
-report_date: 2025-06-22 12:50:31
+report_date: 2025-06-22 13:33:10
 analysis_period:
   start_date: 2024-01-01
   end_date: 2024-12-25

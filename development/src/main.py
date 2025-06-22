@@ -132,7 +132,7 @@ def main():
             self.available_cards_layout.setSpacing(6)
             self.available_scroll_area.setWidget(self.available_cards_widget)
             available_layout.addWidget(self.available_scroll_area)
-            controls_group = QGroupBox("⚙️ Điều khiển")
+            controls_group = QGroupBox("⚙️ Điều Khiển Chung")
             controls_group.setObjectName("ControlsGroup")
             controls_layout = QVBoxLayout(controls_group)
             controls_layout.setContentsMargins(5, 10, 5, 5)
@@ -140,11 +140,20 @@ def main():
             refresh_button = QPushButton("Làm Mới Danh Sách")
             refresh_button.setObjectName("RefreshButton")
             refresh_button.clicked.connect(self.refresh_notebook_list)
+
+            # MODIFIED: Add "Select All" button and its logic
+            select_all_button = QPushButton("Chọn/Bỏ Chọn Tất Cả")
+            select_all_button.setObjectName("SelectAllButton")
+            select_all_button.clicked.connect(self.toggle_select_all_available)
+
             add_section_button = QPushButton("Thêm Section Mới")
             add_section_button.setObjectName("AddSectionButton")
             add_section_button.clicked.connect(self.create_new_section)
+
             controls_layout.addWidget(refresh_button)
+            controls_layout.addWidget(select_all_button)
             controls_layout.addWidget(add_section_button)
+
             available_container_layout.addWidget(available_group)
             available_container_layout.addWidget(controls_group)
             self.available_container.setMinimumWidth(config.NOTEBOOK_LIST_MIN_WIDTH)
@@ -165,44 +174,48 @@ def main():
             description = functions.get_notebook_description(path)
             card = NotebookCard(path, description, self)
             card.clicked.connect(self._on_card_click)
-            parent_layout.addWidget(card)
+
+            new_name = os.path.basename(path)
+            insert_pos = 0
+            for i in range(parent_layout.count()):
+                item = parent_layout.itemAt(i)
+                widget = item.widget()
+                if widget and isinstance(widget, NotebookCard):
+                    if os.path.basename(widget.path) > new_name:
+                        break
+                insert_pos += 1
+
+            parent_layout.insertWidget(insert_pos, card)
             card_dict[path] = card
 
         def _on_card_click(self, path):
             functions.handle_card_click(path, self.available_notebook_cards, self.highlighted_available)
 
-        def clear_all_selections(self):
-            """Bỏ chọn tất cả notebook cards"""
-            for path in list(self.highlighted_available):
-                if path in self.available_notebook_cards:
-                    self.available_notebook_cards[path].set_highlighted(False)
-            self.highlighted_available.clear()
-
-        def mousePressEvent(self, a0):
-            """Xử lý click chuột - nếu click ra ngoài card thì bỏ chọn tất cả"""
-            if not a0:
+        def toggle_select_all_available(self):
+            all_paths = list(self.available_notebook_cards.keys())
+            if not all_paths:
                 return
 
-            # Lấy widget tại vị trí click
-            widget_at_pos = self.childAt(a0.pos())
+            # If the number of highlighted cards is less than total, select all. Otherwise, deselect all.
+            select_all = len(self.highlighted_available) < len(all_paths)
 
-            # Kiểm tra xem có click vào notebook card nào không
-            clicked_on_card = False
-            if widget_at_pos:
-                # Duyệt lên các parent để tìm NotebookCard
-                current_widget = widget_at_pos
-                while current_widget:
-                    if hasattr(current_widget, "__class__") and current_widget.__class__.__name__ == "NotebookCard":
-                        clicked_on_card = True
-                        break
-                    current_widget = current_widget.parent()
+            for path in all_paths:
+                card = self.available_notebook_cards.get(path)
+                if not card:
+                    continue
 
-            # Nếu không click vào card nào, bỏ chọn tất cả
-            if not clicked_on_card:
-                self.clear_all_selections()
-
-            # Gọi method gốc
-            super().mousePressEvent(a0)
+                if select_all:
+                    if not card.is_highlighted:
+                        card.set_highlighted(True)
+                        self.highlighted_available.append(path)
+                else:
+                    if card.is_highlighted:
+                        card.set_highlighted(False)
+                        if path in self.highlighted_available:
+                            self.highlighted_available.remove(path)
+            # Ensure consistency
+            if not select_all:
+                self.highlighted_available.clear()
 
         def refresh_notebook_list(self):
             functions.refresh_notebook_list(
@@ -214,9 +227,6 @@ def main():
             )
 
         def log_message_to_cmd(self, message, is_block=False):
-            """
-            MODIFIED: Handles both simple messages and formatted blocks.
-            """
             if is_block:
                 timestamp = time.strftime("%H:%M:%S")
                 print(f"[{timestamp}]")
@@ -309,16 +319,4 @@ if __name__ == "__main__":
     if "-f" in sys.argv:
         _launch_kernel()
     else:
-        try:
-            main()
-        except Exception as e:
-            import traceback
-
-            print("=" * 60)
-            print("LỖI KHỞI ĐỘNG ỨNG DỤNG:")
-            print("=" * 60)
-            print(f"Lỗi: {str(e)}")
-            print("\nChi tiết lỗi:")
-            print(traceback.format_exc())
-            print("=" * 60)
-            input("Nhấn Enter để thoát...")
+        main()
