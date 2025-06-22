@@ -42,10 +42,6 @@ def setup_application_icon(app):
 
 
 def handle_card_click(path, available_notebook_cards, highlighted_available):
-    """
-    MODIFIED: Logic được viết lại để phù hợp với việc xử lý sự kiện
-    ở cả mousePress và mouseRelease, giải quyết vấn đề UX.
-    """
     if path not in available_notebook_cards:
         return
 
@@ -53,7 +49,6 @@ def handle_card_click(path, available_notebook_cards, highlighted_available):
     is_ctrl_pressed = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ControlModifier)
 
     if is_ctrl_pressed:
-        # Nếu giữ Ctrl, logic không đổi: thêm/bớt lựa chọn
         if card.is_highlighted:
             card.set_highlighted(False)
             if path in highlighted_available:
@@ -63,10 +58,7 @@ def handle_card_click(path, available_notebook_cards, highlighted_available):
             if path not in highlighted_available:
                 highlighted_available.append(path)
     else:
-        # Nếu KHÔNG giữ Ctrl:
         if not card.is_highlighted:
-            # Nếu click vào một mục CHƯA được chọn -> đây là hành động chọn mới.
-            # Bỏ chọn tất cả các mục khác và chỉ chọn mục này.
             for p in list(highlighted_available):
                 if p in available_notebook_cards:
                     available_notebook_cards[p].set_highlighted(False)
@@ -75,9 +67,6 @@ def handle_card_click(path, available_notebook_cards, highlighted_available):
             highlighted_available.append(path)
             card.set_highlighted(True)
         else:
-            # Nếu click vào một mục ĐÃ được chọn -> không làm gì cả ở sự kiện press.
-            # Việc này để giữ nguyên danh sách lựa chọn cho thao tác KÉO THẢ.
-            # Hành động "bỏ chọn các mục khác" sẽ được xử lý ở mouseReleaseEvent.
             pass
 
 
@@ -119,15 +108,30 @@ def log_message(message):
     print(f"[{timestamp}] {message}")
 
 
-def handle_close_event(running_threads):
-    if running_threads:
-        reply = QMessageBox.question(
-            None,
-            "Thoát",
-            "Notebook đang chạy, bạn chắc chắn muốn thoát?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
+def format_output_for_cmd(title, content, width=100):
+    separator = "=" * width
+    formatted_title = f" {title} ".center(width, "=")
+
+    return f"""{formatted_title}
+{content.strip()}
+{separator}"""
+
+
+def handle_close_event(running_count, parent_widget=None):
+    if running_count > 0:
+        msg_box = QMessageBox(parent_widget)
+        msg_box.setWindowTitle("Xác nhận thoát ứng dụng")
+        msg_box.setText(f"Bạn có chắc muốn thoát ứng dụng không?\n"
+                        f"Có {running_count} notebook(s) đang chạy sẽ bị dừng.")
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg_box.setDefaultButton(QMessageBox.StandardButton.No)
+        msg_box.setIcon(QMessageBox.Icon.Question)
+
+        # Apply stylesheet if parent has one
+        if parent_widget and hasattr(parent_widget, "styleSheet") and parent_widget.styleSheet():
+            msg_box.setStyleSheet(parent_widget.styleSheet())
+
+        reply = msg_box.exec()
         return reply == QMessageBox.StandardButton.Yes
     return True
 
@@ -147,11 +151,8 @@ def get_notebook_description(path):
 
 
 def _execute_notebook_process(notebook_path, log_queue, stop_event, execution_mode, execution_count, execution_delay, modules_path):
-    notebook_name = os.path.basename(notebook_path)
+    # notebook_name = os.path.basename(notebook_path)
     notebook_dir = os.path.dirname(notebook_path)
-
-    def log(message):
-        log_queue.put(message)
 
     code_to_inject = f"""
 import sys
@@ -159,7 +160,7 @@ import os
 modules_path = {repr(modules_path)}
 if os.path.exists(modules_path) and modules_path not in sys.path:
     sys.path.insert(0, modules_path)
-    print(f"NBRunner: Added '{{modules_path}}' to path.")
+    print(f"NBRunner: Đã thêm '{{modules_path}}' vào sys.path.")
 """
 
     def run_single_notebook():
@@ -169,66 +170,76 @@ if os.path.exists(modules_path) and modules_path not in sys.path:
                 nb = nbformat.read(f, as_version=4)
             injected_cell = nbformat.v4.new_code_cell(code_to_inject)
             nb.cells.insert(0, injected_cell)
+
             kernel_name = "nbrunner-venv"
             ep = ExecutePreprocessor(timeout=3600, kernel_name=kernel_name)
-            log(f"Bắt đầu thực thi '{notebook_name}'...")
             ep.preprocess(nb, {"metadata": {"path": notebook_dir}})
-            log(f"'{notebook_name}' đã thực thi thành công.")
+
+            for cell in nb.cells:
+                if "outputs" in cell:
+                    for output in cell.outputs:
+                        if output.output_type == "stream" and output.text.strip():
+                            log_queue.put(("NOTEBOOK_PRINT", output.text))
             return True, nb
         except CellExecutionError as e:
-            log(f"LỖI: '{notebook_name}' thất bại tại một cell.")
-            log(f"Error Type: {e.ename}")
-            log(f"Error Value: {e.evalue}")
+            error_details = f"Lỗi trong cell:\n{e.ename}: {e.evalue}\n--- Traceback ---\n{traceback.format_exc()}"
+            log_queue.put(("EXECUTION_ERROR", {"details": error_details}))
             return False, nb
         except Exception as e:
-            log(f"LỖI KHÔNG MONG MUỐN khi chạy '{notebook_name}': {e}\\n{traceback.format_exc()}")
+            error_details = f"Lỗi không mong muốn: {e}\n{traceback.format_exc()}"
+            log_queue.put(("EXECUTION_ERROR", {"details": error_details}))
             return False, nb
 
     if execution_mode == "continuous":
         iteration = 1
         while not stop_event.is_set():
-            log(f"--- Bắt đầu lần lặp thứ {iteration} ---")
-            log_queue.put(("reset_timer", None))
+            # MODIFIED: Gửi tín hiệu reset timer
+            log_queue.put(("RESET_TIMER", None))
+            log_queue.put(("ITERATION_START", {"iteration": iteration, "total": None}))
+            start_time = time.time()
             success, final_nb = run_single_notebook()
-            log_queue.put(("outputs", final_nb))
+            duration = time.time() - start_time
+            log_queue.put(("ITERATION_END", {"iteration": iteration, "success": success, "duration": duration}))
+
             if not success:
-                log_queue.put(("finished", False))
-                return
+                break
             if stop_event.is_set():
                 break
+
             if execution_delay > 0:
-                log(f"Nghỉ {execution_delay} giây trước lần lặp tiếp theo...")
+                log_queue.put(("SECTION_LOG", f"Nghỉ {execution_delay}s..."))
                 time.sleep(execution_delay)
             iteration += 1
     else:
         for i in range(execution_count):
             if stop_event.is_set():
-                log("Đã nhận tín hiệu dừng, hủy bỏ các lần chạy còn lại.")
+                log_queue.put(("SECTION_LOG", "Đã hủy các lần chạy còn lại."))
                 break
-            log(f"--- Bắt đầu lần chạy {i + 1}/{execution_count} ---")
-            log_queue.put(("reset_timer", None))
+
+            # MODIFIED: Gửi tín hiệu reset timer
+            log_queue.put(("RESET_TIMER", None))
+            log_queue.put(("ITERATION_START", {"iteration": i + 1, "total": execution_count}))
+            start_time = time.time()
             success, final_nb = run_single_notebook()
-            log_queue.put(("outputs", final_nb))
+            duration = time.time() - start_time
+            log_queue.put(("ITERATION_END", {"iteration": i + 1, "success": success, "duration": duration}))
+
             if not success:
-                log_queue.put(("finished", False))
-                return
-    log_queue.put(("finished", True))
+                break
+
+    log_queue.put(("EXECUTION_FINISHED", True))
 
 
 def run_notebook_with_individual_logging(
     notebook_path, running_processes, card, execution_mode, execution_count, execution_delay, modules_path
 ):
     if notebook_path in running_processes:
-        if card:
-            card.log_message(f"Notebook đã đang chạy: {os.path.basename(notebook_path)}")
         return
 
     log_queue = Queue()
     stop_event = Event()
     process_args = (notebook_path, log_queue, stop_event, execution_mode, execution_count, execution_delay, modules_path)
     process = Process(target=_execute_notebook_process, args=process_args, daemon=True)
-    running_processes[notebook_path] = {"process": process, "stop_event": stop_event, "queue": log_queue}
+    running_processes[notebook_path] = {"process": process, "stop_event": stop_event, "queue": log_queue, "card": card}
 
-    if card:
-        card.start_log_listener(log_queue)
     process.start()

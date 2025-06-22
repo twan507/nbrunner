@@ -24,24 +24,16 @@ if sys.platform == "win32":
 
 
 def _hide_console_window_on_windows():
-    """
-    Tim va an cua so console cua tien trinh hien tai.
-    Chi hoat dong tren Windows va khi duoc build thanh file .exe.
-    """
     if sys.platform == "win32" and getattr(sys, "frozen", False) and win32console and win32gui:
         try:
             window = win32console.GetConsoleWindow()
             if window:
-                win32gui.ShowWindow(window, 0)  # 0 = SW_HIDE
+                win32gui.ShowWindow(window, 0)
         except Exception as e:
-            # In ra de biet neu co loi, mac du nguoi dung se khong thay
             print(f"Error hiding console: {e}")
 
 
 def _initialize_environment():
-    """
-    Thiet lap cac duong dan va moi truong can thiet.
-    """
     if getattr(sys, "frozen", False):
         root_dir = os.path.dirname(sys.executable)
         modules_dir = os.path.join(root_dir, "modules")
@@ -54,14 +46,12 @@ def _initialize_environment():
 
 
 def _launch_kernel():
-    """Ham rieng biet chi de khoi chay kernel."""
     from ipykernel import kernelapp as app
 
     app.launch_new_instance()
 
 
 def main():
-    """Ham chinh de chay ung dung GUI."""
     from PyQt6.QtWidgets import (
         QApplication,
         QMainWindow,
@@ -74,6 +64,7 @@ def main():
     )
     from PyQt6.QtCore import Qt
     from PyQt6.QtGui import QCloseEvent
+    import time
 
     sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__))))
     import config
@@ -81,7 +72,6 @@ def main():
     import styles
     from ui_components import NotebookCard, SectionWidget
 
-    # --- Lop NotebookRunner va cac phuong thuc giu nguyen ---
     class NotebookRunner(QMainWindow):
         def __init__(self):
             super().__init__()
@@ -89,7 +79,6 @@ def main():
             self.notebooks_path = config.NOTEBOOKS_DIR
             self.modules_path = config.MODULES_DIR
             self.available_notebook_cards = {}
-            # MODIFIED: Thay đổi set thành list để giữ thứ tự lựa chọn
             self.highlighted_available = []
             self.sections = {}
             self.section_counter = 0
@@ -124,7 +113,6 @@ def main():
             self.main_splitter.setObjectName("MainSplitter")
             self.main_splitter.setHandleWidth(8)
 
-            # Loại bỏ log_group - chỉ giữ lại available_container
             self.available_container = QWidget()
             available_container_layout = QVBoxLayout(self.available_container)
             available_container_layout.setContentsMargins(0, 0, 0, 0)
@@ -168,8 +156,6 @@ def main():
             self._update_window_minimum_size()
             self.update()
             QApplication.processEvents()
-
-            # Tự động tạo section đầu tiên
             self.create_new_section()
 
         def apply_stylesheet(self):
@@ -194,19 +180,21 @@ def main():
                 self._create_card_in_list,
             )
 
-        def log_message(self, message):
-            functions.log_message(message)
-
-        def check_output_queue(self):
-            # Hàm này đã được deprecated - không sử dụng nữa
-            pass
-
-        def clear_console(self):
-            # Hàm này đã được deprecated - không sử dụng nữa
-            pass
+        def log_message_to_cmd(self, message, is_block=False):
+            """
+            MODIFIED: Handles both simple messages and formatted blocks.
+            """
+            if is_block:
+                timestamp = time.strftime("%H:%M:%S")
+                print(f"[{timestamp}]")
+                print(message)
+            else:
+                functions.log_message(message)
 
         def closeEvent(self, a0: QCloseEvent | None) -> None:
-            if functions.handle_close_event(self.running_processes):
+            total_running = sum(len(s.running_processes) for s in self.sections.values())
+            reply = functions.handle_close_event(total_running, self)
+            if reply:
                 if a0:
                     a0.accept()
             else:
@@ -224,11 +212,9 @@ def main():
             self.main_splitter.addWidget(section_widget)
             self.sections[section_id] = section_widget
             self._update_window_minimum_size()
-            self.log_message(f"Đã tạo section mới: {section_name}")
+            self.log_message_to_cmd(f"Đã tạo section mới: {section_name}")
 
         def move_notebooks_to_section(self, section_widget, paths_to_move):
-            moved_count = 0
-            # Logic này đã đúng, nó sẽ duyệt qua list đã có thứ tự
             for path in paths_to_move:
                 if path in self.available_notebook_cards:
                     old_card = self.available_notebook_cards[path]
@@ -237,20 +223,20 @@ def main():
                     old_card.deleteLater()
                     del self.available_notebook_cards[path]
                     section_widget.add_notebook_card(path, description)
-                    moved_count += 1
-            # MODIFIED: Xóa sạch list đã chọn sau khi di chuyển
+
+                    nb_name = os.path.basename(path)
+                    self.log_message_to_cmd(f"Đã thêm notebook '{nb_name}' vào section '{section_widget.section_name}'.")
+
             self.highlighted_available.clear()
-            if moved_count > 0:
-                self.log_message(f"Đã kéo thả {moved_count} notebooks vào '{section_widget.section_name}'")
 
         def remove_notebooks_from_section(self, section_widget, paths):
-            moved_count = 0
             for path in paths:
                 if path in section_widget.notebook_cards:
                     section_widget.remove_notebook_card(path)
                     self._create_card_in_list(path, self.available_cards_layout, self.available_notebook_cards)
-                    moved_count += 1
-            self.log_message(f"Đã trả {moved_count} notebooks từ {section_widget.section_name} về danh sách tổng")
+
+                    nb_name = os.path.basename(path)
+                    self.log_message_to_cmd(f"Đã loại bỏ notebook '{nb_name}' khỏi section '{section_widget.section_name}'.")
 
         def close_section(self, section_widget):
             section_id = section_widget.section_id
@@ -262,7 +248,7 @@ def main():
             if section_id in self.sections:
                 del self.sections[section_id]
             self._update_window_minimum_size()
-            self.log_message(f"Đã đóng section: {section_widget.section_name}")
+            self.log_message_to_cmd(f"Đã đóng section: {section_widget.section_name}")
 
     app = QApplication(sys.argv)
     functions.setup_application_icon(app)
@@ -284,11 +270,7 @@ def main():
 
 if __name__ == "__main__":
     freeze_support()
-
-    # *** THAY DOI QUAN TRONG NHAT O DAY ***
-    # An cua so console di ngay khi ung dung .exe khoi dong
     _hide_console_window_on_windows()
-
     _initialize_environment()
 
     if "-f" in sys.argv:

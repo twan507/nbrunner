@@ -24,8 +24,6 @@ from PyQt6.QtWidgets import (
     QApplication,
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QTime, QMimeData, QPoint, QRect
-
-# MODIFIED: Thêm các import cần thiết cho việc vẽ ảnh động
 from PyQt6.QtGui import (
     QFont,
     QMouseEvent,
@@ -37,6 +35,7 @@ from PyQt6.QtGui import (
     QColor,
     QBrush,
     QPen,
+    QTextCursor,
 )
 import config
 import functions
@@ -102,99 +101,62 @@ class NotebookCard(QFrame):
         self.clicked.emit(self.path)
 
     def create_transparent_drag_pixmap(self):
-        """
-        Hàm hỗ trợ: Tạo ảnh của MỘT card với nền trong suốt.
-        """
         pixmap = QPixmap(self.size())
         pixmap.fill(Qt.GlobalColor.transparent)
-
         original_autofill = self.autoFillBackground()
         self.setAutoFillBackground(False)
-
-        # Sử dụng cờ DrawChildren để vẽ viền và chữ, bỏ qua nền
         self.render(pixmap, flags=QWidget.RenderFlag.DrawChildren)
-
         self.setAutoFillBackground(original_autofill)
         return pixmap
 
     def create_stacked_pixmap(self, selected_paths):
-        """
-        MODIFIED: Xóa bỏ hoàn toàn lớp phủ tối màu cho các card bên dưới.
-        """
         all_cards = self.parent_runner.available_notebook_cards
         selected_cards = [all_cards[p] for p in selected_paths if p in all_cards]
-
         if not selected_cards:
             return self.create_transparent_drag_pixmap()
-
         max_cards_to_show = 4
         offset_x, offset_y = 8, 8
-
         base_size = selected_cards[0].size()
         card_width, card_height = base_size.width(), base_size.height()
-
         num_cards_in_stack = min(len(selected_cards), max_cards_to_show)
-
         total_width = card_width + (offset_x * (num_cards_in_stack - 1))
         total_height = card_height + (offset_y * (num_cards_in_stack - 1))
-
         final_pixmap = QPixmap(total_width, total_height)
         final_pixmap.fill(Qt.GlobalColor.transparent)
-
         painter = QPainter(final_pixmap)
-        
         for i in range(num_cards_in_stack):
             index = num_cards_in_stack - 1 - i
             card_to_draw = selected_cards[index]
-            
             card_pixmap = card_to_draw.create_transparent_drag_pixmap()
-
-            # Khối lệnh if dùng để vẽ lớp phủ đã được XÓA BỎ tại đây.
-            
             painter.drawPixmap(offset_x * index, offset_y * index, card_pixmap)
-
-        # Phần vẽ huy hiệu đếm số không thay đổi
         if len(selected_cards) > max_cards_to_show:
             badge_size = 22
             badge_rect = QRect(total_width - badge_size - 2, 2, badge_size, badge_size)
-            
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             painter.setBrush(QBrush(QColor("#0d6efd")))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawEllipse(badge_rect)
-            
             painter.setPen(QPen(Qt.GlobalColor.white))
             font = QFont("Segoe UI", 8, QFont.Weight.Bold)
             painter.setFont(font)
             painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, f"+{len(selected_cards) - max_cards_to_show + 1}")
-
         painter.end()
         return final_pixmap
 
     def mouseMoveEvent(self, a0: QMouseEvent | None) -> None:
-        """
-        MODIFIED: Phục hồi logic chọn giữa ảnh đơn và ảnh xếp chồng.
-        """
         if not a0 or a0.buttons() != Qt.MouseButton.LeftButton or not self.is_highlighted:
             return
-
         selected_paths = self.parent_runner.highlighted_available
         if not selected_paths:
             return
-
         drag = QDrag(self)
         mime_data = QMimeData()
         mime_data.setText("\n".join(selected_paths))
         drag.setMimeData(mime_data)
-
-        # Quyết định dùng ảnh nào dựa trên số lượng lựa chọn
         if len(selected_paths) <= 1:
-            # Nếu chỉ chọn 1, dùng ảnh trong suốt của card đó
             pixmap = self.create_transparent_drag_pixmap()
         else:
-            # Nếu chọn nhiều, dùng ảnh xếp chồng trong suốt
             pixmap = self.create_stacked_pixmap(selected_paths)
-
         drag.setPixmap(pixmap)
         drag.setHotSpot(a0.pos())
         drag.exec(Qt.DropAction.MoveAction)
@@ -202,19 +164,15 @@ class NotebookCard(QFrame):
     def mouseReleaseEvent(self, a0: QMouseEvent | None) -> None:
         if not a0 or self.press_pos is None:
             return
-
         moved_distance = (a0.pos() - self.press_pos).manhattanLength()
         if moved_distance >= QApplication.startDragDistance():
             return
-
         is_ctrl_pressed = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ControlModifier)
-
         if not is_ctrl_pressed and self.is_highlighted and len(self.parent_runner.highlighted_available) > 1:
             other_selected_paths = list(self.parent_runner.highlighted_available)
             for p in other_selected_paths:
                 if p != self.path and p in self.parent_runner.available_notebook_cards:
                     self.parent_runner.available_notebook_cards[p].set_highlighted(False)
-
             self.parent_runner.highlighted_available.clear()
             self.parent_runner.highlighted_available.append(self.path)
 
@@ -227,16 +185,10 @@ class NotebookCard(QFrame):
             style.polish(self)
 
 
-# ======================================================================
-# CÁC CLASS KHÁC (SectionNotebookCard, SectionWidget) KHÔNG THAY ĐỔI
-# ======================================================================
-
-
 class SectionNotebookCard(QFrame):
     run_requested = pyqtSignal(object)
     stop_requested = pyqtSignal(str)
     remove_requested = pyqtSignal(str)
-    clear_log_requested = pyqtSignal(str)
 
     def __init__(self, path, description, parent=None):
         super().__init__(parent)
@@ -251,10 +203,9 @@ class SectionNotebookCard(QFrame):
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setObjectName("SectionCard")
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        self.elapsed_timer = QTimer(self)
-        self.elapsed_timer.timeout.connect(self.update_elapsed_timer)
-        self.log_queue_timer = QTimer(self)
-        self.log_queue = None
+        self.total_elapsed_timer = QTimer(self)
+        self.total_elapsed_timer.timeout.connect(self.update_total_elapsed_timer)
+        self.iteration_logs = {}
         self.setup_ui()
 
     def setup_ui(self):
@@ -326,7 +277,7 @@ class SectionNotebookCard(QFrame):
         self.log_console = QTextEdit()
         self.log_console.setReadOnly(True)
         self.log_console.setObjectName("SectionConsole")
-        self.log_console.setFixedHeight(80)
+        self.log_console.setFixedHeight(60)
         log_layout.addWidget(self.log_console)
         layout.addLayout(log_layout)
         controls_layout = QHBoxLayout()
@@ -339,7 +290,7 @@ class SectionNotebookCard(QFrame):
         self.stop_btn.setEnabled(False)
         self.stop_btn.clicked.connect(self.stop_notebook)
         controls_layout.addWidget(self.stop_btn)
-        self.clear_log_btn = QPushButton("Xóa Log")
+        self.clear_log_btn = QPushButton("Xóa")
         self.clear_log_btn.setObjectName("ClearLogButton")
         self.clear_log_btn.clicked.connect(self.clear_log)
         controls_layout.addWidget(self.clear_log_btn)
@@ -365,8 +316,17 @@ class SectionNotebookCard(QFrame):
         self.execution_delay = value
 
     def run_notebook(self):
+        self.log_console.clear()
+        self.iteration_logs.clear()
+
+        if self.execution_mode == "continuous":
+            log_text = "Bắt đầu: Liên tục."
+        else:
+            log_text = f"Bắt đầu: {self.execution_count} lần."
+        self.log_message_to_section(log_text)
+
         self.set_status("running")
-        self.start_elapsed_timer()
+        self.start_total_elapsed_timer()
         self.run_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
         self.mode_combo.setEnabled(False)
@@ -377,7 +337,6 @@ class SectionNotebookCard(QFrame):
     def stop_notebook(self):
         self.set_status("stopping")
         self.stop_btn.setEnabled(False)
-        self.stop_log_listener()
         self.stop_requested.emit(self.path)
 
     def remove_notebook(self):
@@ -387,17 +346,25 @@ class SectionNotebookCard(QFrame):
 
     def clear_log(self):
         self.log_console.clear()
-        self.clear_log_requested.emit(self.path)
+        self.log_message_to_section("Log đã xóa.")
 
-    def on_execution_finished(self, success):
-        self.set_status("success" if success else "error")
-        self.stop_elapsed_timer()
+    def on_execution_finished(self, by_user_stop=False):
+        if self.current_status not in ["running", "stopping"]:
+            return
+
+        if by_user_stop:
+            self.set_status("stopped")
+            self.log_message_to_section("Đã dừng.")
+        elif self.current_status != "error":
+            self.set_status("success")
+            self.log_message_to_section("Hoàn thành.")
+
+        self.stop_total_elapsed_timer()
         self.run_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.mode_combo.setEnabled(True)
         self.count_spin.setEnabled(True)
         self.delay_spin.setEnabled(True)
-        self.stop_log_listener()
 
     def set_status(self, status, message=None):
         self.current_status = status
@@ -408,7 +375,6 @@ class SectionNotebookCard(QFrame):
             "error": ("Lỗi", "#FF0000"),
             "stopping": ("Đang dừng...", "#fd7e14"),
             "stopped": ("Đã dừng", "#6c757d"),
-            "waiting": ("Đang chờ...", "#007bff"),
         }
         if status in status_map:
             text, color = status_map[status]
@@ -416,14 +382,16 @@ class SectionNotebookCard(QFrame):
             self.status_label.setText(final_text)
             self.status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
 
-    def start_elapsed_timer(self):
+    def start_total_elapsed_timer(self):
         self.start_time = time.time()
-        self.elapsed_timer.start(10)
+        # MODIFIED: Tick mỗi 10ms
+        self.total_elapsed_timer.start(10)
 
-    def stop_elapsed_timer(self):
-        self.elapsed_timer.stop()
+    def stop_total_elapsed_timer(self):
+        self.total_elapsed_timer.stop()
 
-    def update_elapsed_timer(self):
+    def update_total_elapsed_timer(self):
+        # MODIFIED: Khôi phục logic timer mm:ss:msms
         if self.start_time:
             elapsed = time.time() - self.start_time
             total_ms = int(elapsed * 1000)
@@ -432,51 +400,66 @@ class SectionNotebookCard(QFrame):
             hundredths = (total_ms % 1000) // 10
             self.timer_label.setText(f"{minutes:02d}:{seconds:02d}:{hundredths:02d}")
 
-    def start_log_listener(self, queue):
-        self.log_queue = queue
-        self.log_queue_timer.timeout.connect(self.process_log_queue)
-        self.log_queue_timer.start(100)
+    def log_message_to_section(self, message):
+        timestamp = time.strftime("%H:%M:%S")
+        self.log_console.append(f"[{timestamp}] {message}")
+        self._scroll_log_to_bottom()
 
-    def stop_log_listener(self):
-        self.log_queue_timer.stop()
-        self.log_queue = None
-
-    def process_log_queue(self):
-        local_queue = self.log_queue
-        if local_queue is None:
-            return
-        while not local_queue.empty():
-            try:
-                message = local_queue.get_nowait()
-                if isinstance(message, tuple) and len(message) == 2:
-                    msg_type, content = message
-                    if msg_type == "finished":
-                        self.on_execution_finished(success=content)
-                    elif msg_type == "outputs":
-                        self._process_notebook_outputs(content)
-                    elif msg_type == "reset_timer":
-                        self.start_elapsed_timer()
-                else:
-                    self.log_message(str(message))
-            except Exception:
-                pass
-
-    def _process_notebook_outputs(self, nb_object):
-        if nb_object is None:
-            return
-        for cell in nb_object.cells:
-            if "outputs" in cell:
-                for output in cell.outputs:
-                    if output.output_type == "stream":
-                        self.log_message(output.text.strip())
-                    elif output.output_type == "error":
-                        self.log_message(f"LỖI: {''.join(output.traceback)}")
-
-    def log_message(self, message):
-        self.log_console.append(message)
+    def _scroll_log_to_bottom(self):
         scrollbar = self.log_console.verticalScrollBar()
         if scrollbar:
             scrollbar.setValue(scrollbar.maximum())
+
+    def _format_duration(self, seconds):
+        if seconds < 1:
+            return f"{seconds * 1000:.0f}ms"
+        if seconds < 60:
+            return f"{seconds:.1f}s"
+        m, s = divmod(seconds, 60)
+        return f"{int(m)}m {int(s)}s"
+
+    def handle_log_message(self, msg_type, content):
+        # MODIFIED: Thêm xử lý cho RESET_TIMER
+        if msg_type == "RESET_TIMER":
+            self.start_total_elapsed_timer()
+
+        elif msg_type == "SECTION_LOG":
+            self.log_message_to_section(content)
+
+        elif msg_type == "ITERATION_START":
+            iteration = content["iteration"]
+            total = content["total"]
+
+            log_line = f"Lần {iteration}"
+            if total:
+                log_line += f"/{total}"
+            log_line += ":"
+
+            self.log_message_to_section(log_line)
+            cursor = self.log_console.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.StartOfLine)
+            self.iteration_logs[iteration] = cursor
+
+        elif msg_type == "ITERATION_END":
+            iteration = content["iteration"]
+            duration_str = self._format_duration(content["duration"])
+
+            cursor = self.iteration_logs.get(iteration)
+            if cursor:
+                cursor.movePosition(QTextCursor.MoveOperation.EndOfLine)
+                cursor.insertText(f" {duration_str}")
+
+            if not content["success"]:
+                self.set_status("error")
+                self.on_execution_finished(by_user_stop=False)
+
+        elif msg_type == "EXECUTION_ERROR":
+            self.log_message_to_section("LỖI! Kiểm tra console.")
+            self.set_status("error")
+            self.on_execution_finished(by_user_stop=False)
+
+        elif msg_type == "EXECUTION_FINISHED":
+            self.on_execution_finished(by_user_stop=False)
 
 
 class SectionWidget(QWidget):
@@ -489,9 +472,15 @@ class SectionWidget(QWidget):
         self.section_name, self.section_id, self.parent_runner = section_name, section_id, parent_runner
         self.notebook_cards, self.running_processes, self.schedules = {}, {}, []
         self.schedule_counter, self.is_sequence_running = 0, False
+
         self.schedule_timer = QTimer(self)
         self.schedule_timer.timeout.connect(self.check_scheduled_actions)
         self.schedule_timer.start(1000)
+
+        self.queue_checker_timer = QTimer(self)
+        self.queue_checker_timer.timeout.connect(self.check_all_queues)
+        self.queue_checker_timer.start(100)
+
         self.setMinimumWidth(config.SECTION_MIN_WIDTH)
         self.setAcceptDrops(True)
         self.setup_ui()
@@ -503,6 +492,8 @@ class SectionWidget(QWidget):
                 a0.acceptProposedAction()
             else:
                 a0.ignore()
+        elif a0:
+            a0.ignore()
 
     def dropEvent(self, a0: QDropEvent | None) -> None:
         if a0:
@@ -512,6 +503,47 @@ class SectionWidget(QWidget):
                 a0.acceptProposedAction()
             else:
                 a0.ignore()
+        elif a0:
+            a0.ignore()
+
+    def check_all_queues(self):
+        if not self.running_processes:
+            return
+
+        for path, proc_info in list(self.running_processes.items()):
+            queue = proc_info.get("queue")
+            card = proc_info.get("card")
+            if not queue or not card:
+                continue
+
+            while not queue.empty():
+                try:
+                    message = queue.get_nowait()
+                    if isinstance(message, tuple) and len(message) == 2:
+                        msg_type, content = message
+
+                        if msg_type in ["NOTEBOOK_PRINT", "EXECUTION_ERROR"]:
+                            self.log_to_cmd(path, msg_type, content)
+                        else:
+                            card.handle_log_message(msg_type, content)
+                except Exception:
+                    pass
+
+    def log_to_cmd(self, notebook_path, msg_type, content):
+        if not self.parent_runner:
+            return
+
+        nb_name = os.path.basename(notebook_path)
+
+        if msg_type == "NOTEBOOK_PRINT":
+            title = config.LOG_TITLE_NOTEBOOK_PRINT.format(nb_name=nb_name, section_name=self.section_name)
+            formatted_log = functions.format_output_for_cmd(title, str(content))
+            self.parent_runner.log_message_to_cmd(formatted_log, is_block=True)
+
+        elif msg_type == "EXECUTION_ERROR":
+            title = config.LOG_TITLE_NOTEBOOK_ERROR.format(nb_name=nb_name, section_name=self.section_name)
+            formatted_log = functions.format_output_for_cmd(title, content.get("details", ""))
+            self.parent_runner.log_message_to_cmd(formatted_log, is_block=True)
 
     def setup_ui(self):
         main_layout = QVBoxLayout(self)
@@ -613,7 +645,9 @@ class SectionWidget(QWidget):
         self.schedules.append({"id": schedule_id, "action_key": action_key, "action_text": action_text, "time": schedule_time})
         self.update_schedule_display()
         if self.parent_runner:
-            functions.log_message(f"[{self.section_name}] Đã thêm lịch hẹn: '{action_text}' lúc {schedule_time.toString('HH:mm')}")
+            self.parent_runner.log_message_to_cmd(
+                f"[{self.section_name}] Đã thêm lịch hẹn: '{action_text}' lúc {schedule_time.toString('HH:mm')}"
+            )
 
     def remove_schedule(self, schedule_id):
         self.schedules = [s for s in self.schedules if s["id"] != schedule_id]
@@ -652,7 +686,7 @@ class SectionWidget(QWidget):
                 if hasattr(self, schedule["action_key"]):
                     getattr(self, schedule["action_key"])()
                 if self.parent_runner:
-                    functions.log_message(f"[{self.section_name}] Thực thi hẹn giờ: {schedule['action_text']}")
+                    self.parent_runner.log_message_to_cmd(f"[{self.section_name}] Thực thi hẹn giờ: {schedule['action_text']}")
                 executed_ids.append(schedule["id"])
         if executed_ids:
             self.schedules = [s for s in self.schedules if s["id"] not in executed_ids]
@@ -665,46 +699,54 @@ class SectionWidget(QWidget):
         card.run_requested.connect(self.on_card_run_requested)
         card.stop_requested.connect(self.on_card_stop_requested)
         card.remove_requested.connect(self.on_card_remove_requested)
-        card.clear_log_requested.connect(self.on_card_clear_log_requested)
         self.cards_layout.addWidget(card)
         self.notebook_cards[path] = card
 
     def remove_notebook_card(self, path):
         if path in self.notebook_cards:
+            if path in self.running_processes:
+                self.on_card_stop_requested(path)
             self.notebook_cards.pop(path).deleteLater()
-        if path in self.running_processes:
-            del self.running_processes[path]
 
     def on_card_run_requested(self, card):
         self.run_notebook(card)
+        if self.parent_runner:
+            nb_name = os.path.basename(card.path)
+            mode_text = "hữu hạn" if card.execution_mode == "count" else "Liên tục"
+            count_text = f" (Số lần: {card.execution_count})" if mode_text == "Hữu hạn" else ""
+            self.parent_runner.log_message_to_cmd(
+                f"Bắt đầu thực thi '{nb_name}' tại section '{self.section_name}' ở chế độ '{mode_text}'{count_text}."
+            )
 
     def on_card_stop_requested(self, path):
         if self.parent_runner:
-            functions.log_message(f"[{self.section_name}] Gửi tín hiệu dừng: {os.path.basename(path)}")
+            self.parent_runner.log_message_to_cmd(
+                f"Đã gửi yêu cầu dừng notebook '{os.path.basename(path)}' tại section '{self.section_name}'."
+            )
+
         if path in self.running_processes:
             proc_info = self.running_processes[path]
             proc_info["stop_event"].set()
+
             proc_info["process"].join(timeout=2.0)
+
             if proc_info["process"].is_alive():
                 proc_info["process"].terminate()
                 if self.parent_runner:
-                    functions.log_message(f"[{self.section_name}] Buộc dừng: {os.path.basename(path)}")
+                    self.parent_runner.log_message_to_cmd(f"Buộc dừng: {os.path.basename(path)}")
+
             card = self.notebook_cards.get(path)
             if card:
-                card.on_execution_finished(success=False)
-                card.set_status("stopped")
+                card.on_execution_finished(by_user_stop=True)
+
             if path in self.running_processes:
                 del self.running_processes[path]
 
     def on_card_remove_requested(self, path):
         self.notebook_remove_requested.emit(self, [path])
 
-    def on_card_clear_log_requested(self, path):
-        pass
-
     def run_notebook(self, card):
         if self.parent_runner:
-            modules_path = self.parent_runner.modules_path
             functions.run_notebook_with_individual_logging(
                 card.path,
                 self.running_processes,
@@ -712,14 +754,14 @@ class SectionWidget(QWidget):
                 card.execution_mode,
                 card.execution_count,
                 card.execution_delay,
-                modules_path,
+                self.parent_runner.modules_path,
             )
 
     def run_all_simultaneously(self):
         if not self.notebook_cards:
             return
         if self.parent_runner:
-            functions.log_message(f"[{self.section_name}] Bắt đầu chạy đồng thời...")
+            self.parent_runner.log_message_to_cmd(f"[{self.section_name}] Bắt đầu chạy đồng thời...")
         for card in self.notebook_cards.values():
             if card.path not in self.running_processes:
                 card.run_notebook()
@@ -727,7 +769,7 @@ class SectionWidget(QWidget):
     def run_all_sequential_wrapper(self):
         if self.is_sequence_running:
             if self.parent_runner:
-                functions.log_message(f"[{self.section_name}] Một chuỗi tuần tự đã đang chạy.")
+                self.parent_runner.log_message_to_cmd(f"[{self.section_name}] Một chuỗi tuần tự đã đang chạy.")
             return
         threading.Thread(target=self._run_all_sequential_task, daemon=True).start()
 
@@ -738,25 +780,24 @@ class SectionWidget(QWidget):
         self.run_all_btn.setEnabled(False)
         self.run_sequential_btn.setEnabled(False)
         if self.parent_runner:
-            functions.log_message(f"[{self.section_name}] Bắt đầu chạy lần lượt...")
+            self.parent_runner.log_message_to_cmd(f"[{self.section_name}] Bắt đầu chạy lần lượt...")
 
         ordered_cards = []
         for i in range(self.cards_layout.count()):
             item = self.cards_layout.itemAt(i)
-            if item:
-                widget = item.widget()
-                if isinstance(widget, SectionNotebookCard):
-                    ordered_cards.append(widget)
+            if item and isinstance(item.widget(), SectionNotebookCard):
+                ordered_cards.append(item.widget())
 
         for card in ordered_cards:
             if not self.is_sequence_running:
                 if self.parent_runner:
-                    functions.log_message(f"[{self.section_name}] Chuỗi tuần tự đã bị dừng.")
+                    self.parent_runner.log_message_to_cmd(f"[{self.section_name}] Chuỗi tuần tự đã bị dừng.")
                 break
             if card.path in self.running_processes:
                 continue
-            card.set_status("waiting")
+
             card.run_notebook()
+
             if card.path in self.running_processes:
                 proc_info = self.running_processes[card.path]
                 proc_info["process"].join()
@@ -764,7 +805,7 @@ class SectionWidget(QWidget):
                     del self.running_processes[card.path]
 
         if self.parent_runner:
-            functions.log_message(f"[{self.section_name}] Đã hoàn thành chạy lần lượt.")
+            self.parent_runner.log_message_to_cmd(f"[{self.section_name}] Đã hoàn thành chạy lần lượt.")
         self.is_sequence_running = False
         self.run_all_btn.setEnabled(True)
         self.run_sequential_btn.setEnabled(True)
@@ -773,26 +814,38 @@ class SectionWidget(QWidget):
         self.is_sequence_running = False
         if any(p["process"].is_alive() for p in self.running_processes.values()):
             if self.parent_runner:
-                functions.log_message(f"[{self.section_name}] Dừng tất cả...")
+                self.parent_runner.log_message_to_cmd(f"[{self.section_name}] Dừng tất cả notebook đang chạy...")
             for path in list(self.running_processes.keys()):
                 self.on_card_stop_requested(path)
 
     def close_section(self):
-        reply = QMessageBox.question(
-            self,
-            "Xác nhận đóng Section",
-            f"Bạn có chắc muốn đóng section '{self.section_name}' không? "
-            f"Có {len(self.notebook_cards)} notebook(s) sẽ được trả về danh sách.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if reply == QMessageBox.StandardButton.Yes:
-            self.stop_all_notebooks()
-            self.section_close_requested.emit(self)
+        # Đếm số notebook đang chạy
+        running_count = len(self.running_processes)
+
+        if running_count > 0:
+            # Có notebook đang chạy -> cần confirm
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("Xác nhận đóng Section")
+            msg_box.setText(f"Bạn có chắc muốn đóng '{self.section_name}' không?\nCó {running_count} notebook(s) đang chạy sẽ bị dừng.")
+            msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            msg_box.setDefaultButton(QMessageBox.StandardButton.No)
+            msg_box.setIcon(QMessageBox.Icon.Question)
+
+            # Apply stylesheet if parent has one
+            if self.parent_runner and hasattr(self.parent_runner, "styleSheet") and self.parent_runner.styleSheet():
+                msg_box.setStyleSheet(self.parent_runner.styleSheet())
+
+            reply = msg_box.exec()
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+        # Đóng section (với hoặc không confirm tùy theo có notebook chạy)
+        self.stop_all_notebooks()
+        self.section_close_requested.emit(self)
 
     def cleanup(self):
         if hasattr(self, "schedule_timer"):
             self.schedule_timer.stop()
+        if hasattr(self, "queue_checker_timer"):
+            self.queue_checker_timer.stop()
         self.stop_all_notebooks()
-        if self.notebook_cards and self.parent_runner:
-            self.notebook_remove_requested.emit(self, list(self.notebook_cards.keys()))

@@ -44,8 +44,7 @@ def get_stylesheet():
             border-radius: 8px; 
             background-color: #ffffff; 
         }
-        #CardsContainer { background-color: #ffffff; border-radius: 6px; }
-        #Console, #SectionConsole {
+        #CardsContainer { background-color: #ffffff; border-radius: 6px; }        #Console, #SectionConsole {
             background-color: #1e1e1e;
             color: #d4d4d4;
             border: 1px solid #495057;
@@ -53,6 +52,40 @@ def get_stylesheet():
             /* MODIFIED: Giảm padding của console */
             padding: 5px;
             font-family: "JetBrains Mono", "Consolas", monospace;
+        }
+        
+        /* Style riêng cho log console trong section với thanh cuộn tùy chỉnh */
+        #SectionConsole {
+            background-color: white;
+            color: black;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 9pt;
+        }        #SectionConsole QScrollBar:vertical {
+            background: transparent;
+            width: 4px;
+            margin: 0px;
+            border: none;
+            right: 0px;
+        }
+        #SectionConsole QScrollBar::handle:vertical {
+            background: #d0d0d0;
+            border-radius: 2px;
+            margin: 0px;
+            min-height: 15px;
+        }
+        #SectionConsole QScrollBar::handle:vertical:hover {
+            background: #b0b0b0;
+        }
+        #SectionConsole QScrollBar::add-line:vertical,
+        #SectionConsole QScrollBar::sub-line:vertical {
+            height: 0px;
+            background: none;
+        }
+        #SectionConsole QScrollBar::add-page:vertical,
+        #SectionConsole QScrollBar::sub-page:vertical {
+            background: transparent;
         }
         QTextEdit { 
             background-color: #ffffff; 
@@ -203,14 +236,13 @@ def get_stylesheet():
 
         #RemoveButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #dc3545, stop:1 #c82333); }
         #RemoveButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e4606d, stop:1 #dc3545); }        #ClearLogButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6f42c1, stop:1 #5a32a3); }
-        #ClearLogButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #8a63d2, stop:1 #6f42c1); }
-
-        /* === DIALOG & MESSAGE BOX === */
+        #ClearLogButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #8a63d2, stop:1 #6f42c1); }        /* === DIALOG & MESSAGE BOX === */
         QMessageBox {
             background-color: #ffffff;
             color: #2c3e50;
             border: 2px solid #dee2e6;
             border-radius: 8px;
+            font-family: "Segoe UI";
         }
         QMessageBox QLabel {
             background-color: transparent;
@@ -219,18 +251,34 @@ def get_stylesheet():
             font-size: 10pt;
         }
         QMessageBox QPushButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #007bff, stop:1 #0056b3);
-            color: #ffffff;
             border: none;
             border-radius: 6px;
-            padding: 6px 12px;
-            font-weight: 500;
-            min-width: 60px;
+            padding: 2px 4px;
+            font-family: "Segoe UI";
+            font-weight: bold;
+            font-size: 9pt;
+            color: white;
+            min-width: 40px;
+            min-height: 20px;
         }
-        QMessageBox QPushButton:hover {
+        /* Nút Yes - màu xanh biển */
+        QMessageBox QPushButton[text="&Yes"], QMessageBox QPushButton[text="Có"] {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #007bff, stop:1 #0056b3);
+        }
+        QMessageBox QPushButton[text="&Yes"]:hover, QMessageBox QPushButton[text="Có"]:hover {
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0056b3, stop:1 #004085);
         }
-        QMessageBox QPushButton:pressed {
+        QMessageBox QPushButton[text="&Yes"]:pressed, QMessageBox QPushButton[text="Có"]:pressed {
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #004085, stop:1 #002752);
+        }
+        /* Nút No - màu đỏ */
+        QMessageBox QPushButton[text="&No"], QMessageBox QPushButton[text="Không"] {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #dc3545, stop:1 #c82333);
+        }
+        QMessageBox QPushButton[text="&No"]:hover, QMessageBox QPushButton[text="Không"]:hover {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e4606d, stop:1 #dc3545);
+        }
+        QMessageBox QPushButton[text="&No"]:pressed, QMessageBox QPushButton[text="Không"]:pressed {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #c82333, stop:1 #a71e2a);
         }
     """
