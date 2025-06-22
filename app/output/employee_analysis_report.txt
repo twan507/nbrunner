@@ -1,8 +1,8 @@
 BÁO CÁO TỔNG HỢP
-Thời gian tạo: 2025-06-22 09:29:27
+Thời gian tạo: 2025-06-22 10:18:50
 ==================================================
 
-report_date: 2025-06-22 09:29:27
+report_date: 2025-06-22 10:18:50
 total_employees: 20
 departments: 5
 average_salary: 17252845.85

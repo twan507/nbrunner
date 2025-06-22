@@ -89,7 +89,8 @@ def main():
             self.notebooks_path = config.NOTEBOOKS_DIR
             self.modules_path = config.MODULES_DIR
             self.available_notebook_cards = {}
-            self.highlighted_available = set()
+            # MODIFIED: Thay đổi set thành list để giữ thứ tự lựa chọn
+            self.highlighted_available = []
             self.sections = {}
             self.section_counter = 0
             self.available_container = None
@@ -227,6 +228,7 @@ def main():
 
         def move_notebooks_to_section(self, section_widget, paths_to_move):
             moved_count = 0
+            # Logic này đã đúng, nó sẽ duyệt qua list đã có thứ tự
             for path in paths_to_move:
                 if path in self.available_notebook_cards:
                     old_card = self.available_notebook_cards[path]
@@ -236,6 +238,7 @@ def main():
                     del self.available_notebook_cards[path]
                     section_widget.add_notebook_card(path, description)
                     moved_count += 1
+            # MODIFIED: Xóa sạch list đã chọn sau khi di chuyển
             self.highlighted_available.clear()
             if moved_count > 0:
                 self.log_message(f"Đã kéo thả {moved_count} notebooks vào '{section_widget.section_name}'")

@@ -26,17 +26,18 @@ if getattr(sys, "frozen", False):
     MODULES_DIR = os.path.join(ROOT_DIR, "modules")
     NOTEBOOKS_DIR = os.path.join(ROOT_DIR, "notebooks")
 else:
-    MODULES_DIR = os.path.join(ROOT_DIR, "resources", "modules")
-    NOTEBOOKS_DIR = os.path.join(ROOT_DIR, "resources", "notebooks")
+    MODULES_DIR = os.path.join(ROOT_DIR, "app", "modules")
+    NOTEBOOKS_DIR = os.path.join(ROOT_DIR, "app", "notebooks")
 
 APP_BUILD_DIR = os.path.join(ROOT_DIR, "app")
 
 # ===== CÀI ĐẶT KÍCH THƯỚC UI =====
-WINDOW_MIN_HEIGHT = 800
-WINDOW_INITIAL_WIDTH = 300
-WINDOW_INITIAL_HEIGHT = 800
-NOTEBOOK_LIST_INITIAL_WIDTH = WINDOW_INITIAL_WIDTH
+WINDOW_MIN_HEIGHT = 600
+
+NOTEBOOK_LIST_INITIAL_WIDTH = 300
 NOTEBOOK_LIST_MIN_WIDTH = 300
+
 SECTION_MIN_WIDTH = 300
 SECTION_DISPLAY_WIDTH = 300
+
 SPLITTER_INITIAL_SIZES = [NOTEBOOK_LIST_INITIAL_WIDTH]

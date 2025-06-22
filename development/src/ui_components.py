@@ -21,9 +21,23 @@ from PyQt6.QtWidgets import (
     QTimeEdit,
     QSizePolicy,
     QMessageBox,
+    QApplication,
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QTime, QMimeData
-from PyQt6.QtGui import QFont, QMouseEvent, QDrag, QDropEvent, QDragEnterEvent
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QTime, QMimeData, QPoint, QRect
+
+# MODIFIED: Thêm các import cần thiết cho việc vẽ ảnh động
+from PyQt6.QtGui import (
+    QFont,
+    QMouseEvent,
+    QDrag,
+    QDropEvent,
+    QDragEnterEvent,
+    QPixmap,
+    QPainter,
+    QColor,
+    QBrush,
+    QPen,
+)
 import config
 import functions
 
@@ -62,6 +76,7 @@ class NotebookCard(QFrame):
     def __init__(self, path, description, parent_runner, parent=None):
         super().__init__(parent)
         self.path, self.is_highlighted, self.parent_runner = path, False, parent_runner
+        self.press_pos: QPoint | None = None
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setObjectName("Card")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -83,25 +98,125 @@ class NotebookCard(QFrame):
     def mousePressEvent(self, a0: QMouseEvent | None) -> None:
         if not a0:
             return
+        self.press_pos = a0.pos()
         self.clicked.emit(self.path)
-        super().mousePressEvent(a0)
+
+    def create_transparent_drag_pixmap(self):
+        """
+        Hàm hỗ trợ: Tạo ảnh của MỘT card với nền trong suốt.
+        """
+        pixmap = QPixmap(self.size())
+        pixmap.fill(Qt.GlobalColor.transparent)
+
+        original_autofill = self.autoFillBackground()
+        self.setAutoFillBackground(False)
+
+        # Sử dụng cờ DrawChildren để vẽ viền và chữ, bỏ qua nền
+        self.render(pixmap, flags=QWidget.RenderFlag.DrawChildren)
+
+        self.setAutoFillBackground(original_autofill)
+        return pixmap
+
+    def create_stacked_pixmap(self, selected_paths):
+        """
+        MODIFIED: Xóa bỏ hoàn toàn lớp phủ tối màu cho các card bên dưới.
+        """
+        all_cards = self.parent_runner.available_notebook_cards
+        selected_cards = [all_cards[p] for p in selected_paths if p in all_cards]
+
+        if not selected_cards:
+            return self.create_transparent_drag_pixmap()
+
+        max_cards_to_show = 4
+        offset_x, offset_y = 8, 8
+
+        base_size = selected_cards[0].size()
+        card_width, card_height = base_size.width(), base_size.height()
+
+        num_cards_in_stack = min(len(selected_cards), max_cards_to_show)
+
+        total_width = card_width + (offset_x * (num_cards_in_stack - 1))
+        total_height = card_height + (offset_y * (num_cards_in_stack - 1))
+
+        final_pixmap = QPixmap(total_width, total_height)
+        final_pixmap.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(final_pixmap)
+        
+        for i in range(num_cards_in_stack):
+            index = num_cards_in_stack - 1 - i
+            card_to_draw = selected_cards[index]
+            
+            card_pixmap = card_to_draw.create_transparent_drag_pixmap()
+
+            # Khối lệnh if dùng để vẽ lớp phủ đã được XÓA BỎ tại đây.
+            
+            painter.drawPixmap(offset_x * index, offset_y * index, card_pixmap)
+
+        # Phần vẽ huy hiệu đếm số không thay đổi
+        if len(selected_cards) > max_cards_to_show:
+            badge_size = 22
+            badge_rect = QRect(total_width - badge_size - 2, 2, badge_size, badge_size)
+            
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setBrush(QBrush(QColor("#0d6efd")))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawEllipse(badge_rect)
+            
+            painter.setPen(QPen(Qt.GlobalColor.white))
+            font = QFont("Segoe UI", 8, QFont.Weight.Bold)
+            painter.setFont(font)
+            painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, f"+{len(selected_cards) - max_cards_to_show + 1}")
+
+        painter.end()
+        return final_pixmap
 
     def mouseMoveEvent(self, a0: QMouseEvent | None) -> None:
-        if not a0:
+        """
+        MODIFIED: Phục hồi logic chọn giữa ảnh đơn và ảnh xếp chồng.
+        """
+        if not a0 or a0.buttons() != Qt.MouseButton.LeftButton or not self.is_highlighted:
             return
-        if a0.buttons() != Qt.MouseButton.LeftButton or not self.is_highlighted:
-            return
-        drag = QDrag(self)
-        mime_data = QMimeData()
+
         selected_paths = self.parent_runner.highlighted_available
         if not selected_paths:
             return
+
+        drag = QDrag(self)
+        mime_data = QMimeData()
         mime_data.setText("\n".join(selected_paths))
         drag.setMimeData(mime_data)
-        pixmap = self.grab()
+
+        # Quyết định dùng ảnh nào dựa trên số lượng lựa chọn
+        if len(selected_paths) <= 1:
+            # Nếu chỉ chọn 1, dùng ảnh trong suốt của card đó
+            pixmap = self.create_transparent_drag_pixmap()
+        else:
+            # Nếu chọn nhiều, dùng ảnh xếp chồng trong suốt
+            pixmap = self.create_stacked_pixmap(selected_paths)
+
         drag.setPixmap(pixmap)
         drag.setHotSpot(a0.pos())
         drag.exec(Qt.DropAction.MoveAction)
+
+    def mouseReleaseEvent(self, a0: QMouseEvent | None) -> None:
+        if not a0 or self.press_pos is None:
+            return
+
+        moved_distance = (a0.pos() - self.press_pos).manhattanLength()
+        if moved_distance >= QApplication.startDragDistance():
+            return
+
+        is_ctrl_pressed = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ControlModifier)
+
+        if not is_ctrl_pressed and self.is_highlighted and len(self.parent_runner.highlighted_available) > 1:
+            other_selected_paths = list(self.parent_runner.highlighted_available)
+            for p in other_selected_paths:
+                if p != self.path and p in self.parent_runner.available_notebook_cards:
+                    self.parent_runner.available_notebook_cards[p].set_highlighted(False)
+
+            self.parent_runner.highlighted_available.clear()
+            self.parent_runner.highlighted_available.append(self.path)
 
     def set_highlighted(self, highlighted):
         self.is_highlighted = highlighted
@@ -110,6 +225,11 @@ class NotebookCard(QFrame):
         if style:
             style.unpolish(self)
             style.polish(self)
+
+
+# ======================================================================
+# CÁC CLASS KHÁC (SectionNotebookCard, SectionWidget) KHÔNG THAY ĐỔI
+# ======================================================================
 
 
 class SectionNotebookCard(QFrame):
@@ -121,7 +241,13 @@ class SectionNotebookCard(QFrame):
     def __init__(self, path, description, parent=None):
         super().__init__(parent)
         self.path, self.description = path, description
-        self.execution_mode, self.execution_count, self.current_status, self.start_time = "continuous", 1, "ready", None
+        self.execution_mode, self.execution_count, self.execution_delay, self.current_status, self.start_time = (
+            "continuous",
+            1,
+            0,
+            "ready",
+            None,
+        )
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setObjectName("SectionCard")
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
@@ -144,12 +270,29 @@ class SectionNotebookCard(QFrame):
         desc_label.setWordWrap(True)
         desc_label.setStyleSheet("color: #666666;")
         layout.addWidget(desc_label)
+
         mode_layout = QHBoxLayout()
-        mode_layout.addWidget(QLabel("Phương pháp:"))
         self.mode_combo = QComboBox()
-        self.mode_combo.addItems(["Liên tục", "Số lần"])
+        self.mode_combo.addItems(["Chạy liên tục", "Chạy hữu hạn"])
         self.mode_combo.currentTextChanged.connect(self.on_mode_changed)
-        mode_layout.addWidget(self.mode_combo)
+        mode_layout.addWidget(self.mode_combo, 1)
+
+        self.delay_label = QLabel("Nghỉ (s):")
+        self.delay_spin = QSpinBox()
+        self.delay_spin.setStyleSheet(
+            "QSpinBox{background-color:#f0f0f0;border:1px solid #ccc;border-radius:4px;padding:3px 0px;color:black;}"
+        )
+        self.delay_spin.setMinimum(0)
+        self.delay_spin.setMaximum(999)
+        self.delay_spin.setValue(0)
+        self.delay_spin.setFixedWidth(40)
+        self.delay_spin.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
+        self.delay_spin.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.delay_spin.valueChanged.connect(self.on_delay_changed)
+        mode_layout.addWidget(self.delay_label)
+        mode_layout.addWidget(self.delay_spin)
+
+        self.count_label = QLabel("Số lần:")
         self.count_spin = QSpinBox()
         self.count_spin.setStyleSheet(
             "QSpinBox{background-color:#f0f0f0;border:1px solid #ccc;border-radius:4px;padding:3px 0px;color:black;}"
@@ -160,10 +303,14 @@ class SectionNotebookCard(QFrame):
         self.count_spin.setFixedWidth(40)
         self.count_spin.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
         self.count_spin.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.count_label.setVisible(False)
         self.count_spin.setVisible(False)
         self.count_spin.valueChanged.connect(self.on_count_changed)
+        mode_layout.addWidget(self.count_label)
         mode_layout.addWidget(self.count_spin)
+
         layout.addLayout(mode_layout)
+
         status_layout = QHBoxLayout()
         status_layout.addWidget(QLabel("Trạng thái:"))
         self.status_label = QLabel("Sẵn sàng")
@@ -204,11 +351,18 @@ class SectionNotebookCard(QFrame):
         layout.addStretch()
 
     def on_mode_changed(self, text):
-        self.execution_mode = "count" if text == "Số lần" else "continuous"
-        self.count_spin.setVisible(text == "Số lần")
+        is_count_mode = text == "Chạy hữu hạn"
+        self.execution_mode = "count" if is_count_mode else "continuous"
+        self.count_label.setVisible(is_count_mode)
+        self.count_spin.setVisible(is_count_mode)
+        self.delay_label.setVisible(not is_count_mode)
+        self.delay_spin.setVisible(not is_count_mode)
 
     def on_count_changed(self, value):
         self.execution_count = value
+
+    def on_delay_changed(self, value):
+        self.execution_delay = value
 
     def run_notebook(self):
         self.set_status("running")
@@ -217,6 +371,7 @@ class SectionNotebookCard(QFrame):
         self.stop_btn.setEnabled(True)
         self.mode_combo.setEnabled(False)
         self.count_spin.setEnabled(False)
+        self.delay_spin.setEnabled(False)
         self.run_requested.emit(self)
 
     def stop_notebook(self):
@@ -241,6 +396,7 @@ class SectionNotebookCard(QFrame):
         self.stop_btn.setEnabled(False)
         self.mode_combo.setEnabled(True)
         self.count_spin.setEnabled(True)
+        self.delay_spin.setEnabled(True)
         self.stop_log_listener()
 
     def set_status(self, status, message=None):
@@ -547,9 +703,7 @@ class SectionWidget(QWidget):
         pass
 
     def run_notebook(self, card):
-        """Hàm này đã được cập nhật để truyền thêm modules_path."""
         if self.parent_runner:
-            # Lấy modules_path từ parent_runner và truyền vào
             modules_path = self.parent_runner.modules_path
             functions.run_notebook_with_individual_logging(
                 card.path,
@@ -557,7 +711,8 @@ class SectionWidget(QWidget):
                 card,
                 card.execution_mode,
                 card.execution_count,
-                modules_path,  # Đây là tham số mới
+                card.execution_delay,
+                modules_path,
             )
 
     def run_all_simultaneously(self):

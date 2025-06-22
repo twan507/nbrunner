@@ -42,26 +42,43 @@ def setup_application_icon(app):
 
 
 def handle_card_click(path, available_notebook_cards, highlighted_available):
+    """
+    MODIFIED: Logic được viết lại để phù hợp với việc xử lý sự kiện
+    ở cả mousePress và mouseRelease, giải quyết vấn đề UX.
+    """
     if path not in available_notebook_cards:
         return
-    card_list = available_notebook_cards
-    selection_set = highlighted_available
-    is_ctrl_pressed = QApplication.keyboardModifiers() & Qt.KeyboardModifier.ControlModifier
-    card = card_list[path]
-    is_highlighted = card.is_highlighted
-    if not is_ctrl_pressed:
-        for p in list(selection_set):
-            if p in card_list:
-                card_list[p].set_highlighted(False)
-        selection_set.clear()
-        card.set_highlighted(True)
-        selection_set.add(path)
-    else:
-        card.set_highlighted(not is_highlighted)
+
+    card = available_notebook_cards[path]
+    is_ctrl_pressed = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ControlModifier)
+
+    if is_ctrl_pressed:
+        # Nếu giữ Ctrl, logic không đổi: thêm/bớt lựa chọn
         if card.is_highlighted:
-            selection_set.add(path)
+            card.set_highlighted(False)
+            if path in highlighted_available:
+                highlighted_available.remove(path)
         else:
-            selection_set.remove(path)
+            card.set_highlighted(True)
+            if path not in highlighted_available:
+                highlighted_available.append(path)
+    else:
+        # Nếu KHÔNG giữ Ctrl:
+        if not card.is_highlighted:
+            # Nếu click vào một mục CHƯA được chọn -> đây là hành động chọn mới.
+            # Bỏ chọn tất cả các mục khác và chỉ chọn mục này.
+            for p in list(highlighted_available):
+                if p in available_notebook_cards:
+                    available_notebook_cards[p].set_highlighted(False)
+
+            highlighted_available.clear()
+            highlighted_available.append(path)
+            card.set_highlighted(True)
+        else:
+            # Nếu click vào một mục ĐÃ được chọn -> không làm gì cả ở sự kiện press.
+            # Việc này để giữ nguyên danh sách lựa chọn cho thao tác KÉO THẢ.
+            # Hành động "bỏ chọn các mục khác" sẽ được xử lý ở mouseReleaseEvent.
+            pass
 
 
 def refresh_notebook_list(notebooks_path, available_cards_layout, available_notebook_cards, highlighted_available, create_card_callback):
@@ -98,14 +115,8 @@ def refresh_notebook_list(notebooks_path, available_cards_layout, available_note
 
 
 def log_message(message):
-    """Ghi log ra cmd hệ thống thay vì GUI console."""
     timestamp = time.strftime("%H:%M:%S")
     print(f"[{timestamp}] {message}")
-
-
-def check_output_queue(output_queue, output_console):
-    """Hàm này đã được deprecated - không sử dụng nữa."""
-    pass
 
 
 def handle_close_event(running_threads):
@@ -135,26 +146,16 @@ def get_notebook_description(path):
         return "Không thể đọc mô tả."
 
 
-# --- LÕI THỰC THI NOTEBOOK (PHƯƠNG PHÁP TIÊM CODE) ---
-
-
-def _execute_notebook_process(notebook_path, log_queue, stop_event, execution_mode, execution_count, modules_path):
-    """
-    Hàm này chạy trong một tiến trình riêng.
-    Nó sẽ "tiêm" một cell code vào đầu notebook để thiết lập môi trường.
-    """
+def _execute_notebook_process(notebook_path, log_queue, stop_event, execution_mode, execution_count, execution_delay, modules_path):
     notebook_name = os.path.basename(notebook_path)
     notebook_dir = os.path.dirname(notebook_path)
 
     def log(message):
         log_queue.put(message)
 
-    # Chuẩn bị code để tiêm vào notebook
-    # Dùng repr() để xử lý các dấu gạch chéo ngược trên Windows một cách an toàn
     code_to_inject = f"""
 import sys
 import os
-# Thêm đường dẫn modules tùy chỉnh
 modules_path = {repr(modules_path)}
 if os.path.exists(modules_path) and modules_path not in sys.path:
     sys.path.insert(0, modules_path)
@@ -166,16 +167,10 @@ if os.path.exists(modules_path) and modules_path not in sys.path:
         try:
             with open(notebook_path, "r", encoding="utf-8") as f:
                 nb = nbformat.read(f, as_version=4)
-
-            # Tiêm code vào đầu notebook
             injected_cell = nbformat.v4.new_code_cell(code_to_inject)
             nb.cells.insert(0, injected_cell)
-
-            # Sử dụng kernel đã đăng ký trong môi trường dev
             kernel_name = "nbrunner-venv"
-
             ep = ExecutePreprocessor(timeout=3600, kernel_name=kernel_name)
-
             log(f"Bắt đầu thực thi '{notebook_name}'...")
             ep.preprocess(nb, {"metadata": {"path": notebook_dir}})
             log(f"'{notebook_name}' đã thực thi thành công.")
@@ -189,7 +184,6 @@ if os.path.exists(modules_path) and modules_path not in sys.path:
             log(f"LỖI KHÔNG MONG MUỐN khi chạy '{notebook_name}': {e}\\n{traceback.format_exc()}")
             return False, nb
 
-    # Vòng lặp điều khiển không thay đổi
     if execution_mode == "continuous":
         iteration = 1
         while not stop_event.is_set():
@@ -200,8 +194,13 @@ if os.path.exists(modules_path) and modules_path not in sys.path:
             if not success:
                 log_queue.put(("finished", False))
                 return
+            if stop_event.is_set():
+                break
+            if execution_delay > 0:
+                log(f"Nghỉ {execution_delay} giây trước lần lặp tiếp theo...")
+                time.sleep(execution_delay)
             iteration += 1
-    else:  # Chế độ "count"
+    else:
         for i in range(execution_count):
             if stop_event.is_set():
                 log("Đã nhận tín hiệu dừng, hủy bỏ các lần chạy còn lại.")
@@ -216,8 +215,9 @@ if os.path.exists(modules_path) and modules_path not in sys.path:
     log_queue.put(("finished", True))
 
 
-def run_notebook_with_individual_logging(notebook_path, running_processes, card, execution_mode, execution_count, modules_path):
-    """Hàm này đã được cập nhật để nhận thêm modules_path."""
+def run_notebook_with_individual_logging(
+    notebook_path, running_processes, card, execution_mode, execution_count, execution_delay, modules_path
+):
     if notebook_path in running_processes:
         if card:
             card.log_message(f"Notebook đã đang chạy: {os.path.basename(notebook_path)}")
@@ -225,11 +225,8 @@ def run_notebook_with_individual_logging(notebook_path, running_processes, card,
 
     log_queue = Queue()
     stop_event = Event()
-
-    # Truyền modules_path vào tiến trình con
-    process_args = (notebook_path, log_queue, stop_event, execution_mode, execution_count, modules_path)
+    process_args = (notebook_path, log_queue, stop_event, execution_mode, execution_count, execution_delay, modules_path)
     process = Process(target=_execute_notebook_process, args=process_args, daemon=True)
-
     running_processes[notebook_path] = {"process": process, "stop_event": stop_event, "queue": log_queue}
 
     if card:
