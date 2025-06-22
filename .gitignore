@@ -179,8 +179,8 @@ cython_debug/
 development/venv/
 
 # Built Application (file exe và thư mục build)
-app/
-resources/output/*
+app/_internal
+app/*.exe
 
 # PyInstaller temporary files
 build/
