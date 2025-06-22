@@ -121,8 +121,7 @@ def handle_close_event(running_count, parent_widget=None):
     if running_count > 0:
         msg_box = QMessageBox(parent_widget)
         msg_box.setWindowTitle("Xác nhận thoát ứng dụng")
-        msg_box.setText(f"Bạn có chắc muốn thoát ứng dụng không?\n"
-                        f"Có {running_count} notebook(s) đang chạy sẽ bị dừng.")
+        msg_box.setText(f"Bạn có chắc muốn thoát ứng dụng không?\nCó {running_count} notebook(s) đang chạy sẽ bị dừng.")
         msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         msg_box.setDefaultButton(QMessageBox.StandardButton.No)
         msg_box.setIcon(QMessageBox.Icon.Question)
@@ -243,3 +242,11 @@ def run_notebook_with_individual_logging(
     running_processes[notebook_path] = {"process": process, "stop_event": stop_event, "queue": log_queue, "card": card}
 
     process.start()
+
+
+def clear_all_card_selections(available_notebook_cards, highlighted_available):
+    """Bỏ chọn tất cả notebook cards"""
+    for path in list(highlighted_available):
+        if path in available_notebook_cards:
+            available_notebook_cards[path].set_highlighted(False)
+    highlighted_available.clear()

@@ -171,6 +171,39 @@ def main():
         def _on_card_click(self, path):
             functions.handle_card_click(path, self.available_notebook_cards, self.highlighted_available)
 
+        def clear_all_selections(self):
+            """Bỏ chọn tất cả notebook cards"""
+            for path in list(self.highlighted_available):
+                if path in self.available_notebook_cards:
+                    self.available_notebook_cards[path].set_highlighted(False)
+            self.highlighted_available.clear()
+
+        def mousePressEvent(self, a0):
+            """Xử lý click chuột - nếu click ra ngoài card thì bỏ chọn tất cả"""
+            if not a0:
+                return
+
+            # Lấy widget tại vị trí click
+            widget_at_pos = self.childAt(a0.pos())
+
+            # Kiểm tra xem có click vào notebook card nào không
+            clicked_on_card = False
+            if widget_at_pos:
+                # Duyệt lên các parent để tìm NotebookCard
+                current_widget = widget_at_pos
+                while current_widget:
+                    if hasattr(current_widget, "__class__") and current_widget.__class__.__name__ == "NotebookCard":
+                        clicked_on_card = True
+                        break
+                    current_widget = current_widget.parent()
+
+            # Nếu không click vào card nào, bỏ chọn tất cả
+            if not clicked_on_card:
+                self.clear_all_selections()
+
+            # Gọi method gốc
+            super().mousePressEvent(a0)
+
         def refresh_notebook_list(self):
             functions.refresh_notebook_list(
                 self.notebooks_path,
@@ -276,4 +309,16 @@ if __name__ == "__main__":
     if "-f" in sys.argv:
         _launch_kernel()
     else:
-        main()
+        try:
+            main()
+        except Exception as e:
+            import traceback
+
+            print("=" * 60)
+            print("LỖI KHỞI ĐỘNG ỨNG DỤNG:")
+            print("=" * 60)
+            print(f"Lỗi: {str(e)}")
+            print("\nChi tiết lỗi:")
+            print(traceback.format_exc())
+            print("=" * 60)
+            input("Nhấn Enter để thoát...")
