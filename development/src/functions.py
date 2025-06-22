@@ -170,8 +170,12 @@ if os.path.exists(modules_path) and modules_path not in sys.path:
             injected_cell = nbformat.v4.new_code_cell(code_to_inject)
             nb.cells.insert(0, injected_cell)
 
-            kernel_name = "nbrunner-venv"
-            ep = ExecutePreprocessor(timeout=3600, kernel_name=kernel_name)
+            # *** SỬA ĐỔI CHÍNH ***
+            # Bằng cách không chỉ định 'kernel_name', nbconvert sẽ sử dụng
+            # môi trường Python hiện tại để chạy notebook.
+            # Trong một ứng dụng đã được đóng gói, đây chính là môi trường
+            # Python mà PyInstaller đã nhúng vào.
+            ep = ExecutePreprocessor(timeout=3600)
             ep.preprocess(nb, {"metadata": {"path": notebook_dir}})
 
             for cell in nb.cells:
