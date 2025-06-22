@@ -10,14 +10,14 @@ ipykernel==6.29.4
 jupyter-core==5.7.2
 traitlets==5.14.3
 
-# Data handling - Thư viện cơ bản cho notebooks
+# Data handling - Thư viện cơ bản cho notebook
 pandas==2.2.2
 numpy==1.26.4
 
 # File and directory management
 send2trash==1.8.3       # Send files to trash instead of permanent deletion
 
-# Excel support (nếu notebooks cần xử lý Excel)
+# Excel support (nếu notebook cần xử lý Excel)
 openpyxl==3.1.2         # Read/write Excel 2010 xlsx/xlsm files
 
 # CSV and data formats

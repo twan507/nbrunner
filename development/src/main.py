@@ -36,10 +36,10 @@ def _hide_console_window_on_windows():
 def _initialize_environment():
     if getattr(sys, "frozen", False):
         root_dir = os.path.dirname(sys.executable)
-        modules_dir = os.path.join(root_dir, "modules")
+        modules_dir = os.path.join(root_dir, "module")
     else:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        modules_dir = os.path.join(project_root, "app", "modules")
+        modules_dir = os.path.join(project_root, "app", "module")
 
     if os.path.exists(modules_dir) and modules_dir not in sys.path:
         sys.path.insert(0, modules_dir)
@@ -313,10 +313,10 @@ def main():
 
 if __name__ == "__main__":
     freeze_support()
-    _hide_console_window_on_windows()
     _initialize_environment()
 
     if "-f" in sys.argv:
         _launch_kernel()
     else:
+        _hide_console_window_on_windows()
         main()

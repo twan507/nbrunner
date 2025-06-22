@@ -23,11 +23,11 @@ EXE_FILE_NAME = "nbrunner.exe"
 ICON_PATH = os.path.join(ROOT_DIR, "development", "logo.ico")
 
 if getattr(sys, "frozen", False):
-    MODULES_DIR = os.path.join(ROOT_DIR, "modules")
-    NOTEBOOKS_DIR = os.path.join(ROOT_DIR, "notebooks")
+    MODULES_DIR = os.path.join(ROOT_DIR, "module")
+    NOTEBOOKS_DIR = os.path.join(ROOT_DIR, "notebook")
 else:
-    MODULES_DIR = os.path.join(ROOT_DIR, "app", "modules")
-    NOTEBOOKS_DIR = os.path.join(ROOT_DIR, "app", "notebooks")
+    MODULES_DIR = os.path.join(ROOT_DIR, "app", "module")
+    NOTEBOOKS_DIR = os.path.join(ROOT_DIR, "app", "notebook")
 
 APP_BUILD_DIR = os.path.join(ROOT_DIR, "app")
 

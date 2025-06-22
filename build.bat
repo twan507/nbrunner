@@ -28,7 +28,7 @@ echo Don dep cac thu muc cu...
 if exist "build" rmdir /s /q "build"
 if exist "dist" rmdir /s /q "dist"
 
-REM Chi xoa file .exe va thu muc _internal cu trong app (giu nguyen data, modules, notebooks, output)
+REM Chi xoa file .exe va thu muc _internal cu trong app (giu nguyen data, module, notebook, output)
 if exist "%APP_BUILD_DIR%\%EXE_FILE_NAME%" del /f /q "%APP_BUILD_DIR%\%EXE_FILE_NAME%"
 if exist "%APP_BUILD_DIR%\_internal" rmdir /s /q "%APP_BUILD_DIR%\_internal"
 
@@ -72,13 +72,13 @@ if not exist "%APP_BUILD_DIR%\data" (
     xcopy /E /I /Y /Q "resources\data" "%APP_BUILD_DIR%\data\"
     echo Da sao chep thu muc 'data'.
 )
-if not exist "%APP_BUILD_DIR%\modules" (
-    xcopy /E /I /Y /Q "resources\modules" "%APP_BUILD_DIR%\modules\"
-    echo Da sao chep thu muc 'modules'.
+if not exist "%APP_BUILD_DIR%\module" (
+    xcopy /E /I /Y /Q "resources\module" "%APP_BUILD_DIR%\module\"
+    echo Da sao chep thu muc 'module'.
 )
-if not exist "%APP_BUILD_DIR%\notebooks" (
-    xcopy /E /I /Y /Q "resources\notebooks" "%APP_BUILD_DIR%\notebooks\"
-    echo Da sao chep thu muc 'notebooks'.
+if not exist "%APP_BUILD_DIR%\notebook" (
+    xcopy /E /I /Y /Q "resources\notebook" "%APP_BUILD_DIR%\notebook\"
+    echo Da sao chep thu muc 'notebook'.
 )
 if not exist "%APP_BUILD_DIR%\output" (
     mkdir "%APP_BUILD_DIR%\output" >nul 2>&1
