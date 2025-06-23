@@ -575,7 +575,7 @@ class SectionWidget(QWidget):
         schedule_main_layout.setSpacing(10)
         add_schedule_layout = QHBoxLayout()
         self.action_combo = QComboBox()
-        self.action_combo.addItems(["Chạy đồng thời", "Chạy lần lượt", "Dừng tất cả"])
+        self.action_combo.addItems(["Chạy Đồng Thời", "Chạy Lần Lượt", "Dừng Tất Cả"])
         self.action_combo.setFont(QFont("Segoe UI", 9))
         add_schedule_layout.addWidget(self.action_combo, 1)
         add_schedule_layout.addSpacing(5)
@@ -622,7 +622,7 @@ class SectionWidget(QWidget):
         self.run_all_btn.setObjectName("SectionRunButton")
         self.run_all_btn.clicked.connect(self.run_all_simultaneously)
         row1_layout.addWidget(self.run_all_btn)
-        self.run_sequential_btn = QPushButton("Chạy lần lượt")
+        self.run_sequential_btn = QPushButton("Chạy Lần lượt")
         self.run_sequential_btn.setObjectName("SectionRunButton")
         self.run_sequential_btn.clicked.connect(self.run_all_sequential_wrapper)
         row1_layout.addWidget(self.run_sequential_btn)
@@ -634,7 +634,7 @@ class SectionWidget(QWidget):
         self.stop_all_btn.setObjectName("SectionStopButton")
         self.stop_all_btn.clicked.connect(self.stop_all_notebooks)
         row2_layout.addWidget(self.stop_all_btn)
-        self.clear_all_logs_btn = QPushButton("Xoá Log")
+        self.clear_all_logs_btn = QPushButton("Xoá Tất Cả")
         self.clear_all_logs_btn.setObjectName("ClearAllLogsButton")
         self.clear_all_logs_btn.clicked.connect(self._clear_all_logs)
         row2_layout.addWidget(self.clear_all_logs_btn)
@@ -671,9 +671,9 @@ class SectionWidget(QWidget):
         action_text = self.action_combo.currentText()
         schedule_time = self.schedule_time_edit.time()
         action_map = {
-            "Chạy đồng thời": "run_all_simultaneously",
-            "Chạy lần lượt": "run_all_sequential_wrapper",
-            "Dừng tất cả": "stop_all_notebooks",
+            "Chạy Đồng Thời": "run_all_simultaneously",
+            "Chạy Lần Lượt": "run_all_sequential_wrapper",
+            "Dừng Tất Cả": "stop_all_notebooks",
         }
         action_key = action_map.get(action_text)
         self.schedules.append({"id": schedule_id, "action_key": action_key, "action_text": action_text, "time": schedule_time})
