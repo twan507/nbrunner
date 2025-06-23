@@ -137,7 +137,7 @@ def main():
             controls_layout = QVBoxLayout(controls_group)
             controls_layout.setContentsMargins(5, 10, 5, 5)
             controls_layout.setSpacing(8)
-            refresh_button = QPushButton("Làm Mới Danh Sách")
+            refresh_button = QPushButton("Làm Mới NoteBooks")
             refresh_button.setObjectName("RefreshButton")
             refresh_button.clicked.connect(self.refresh_notebook_list)
 
@@ -218,13 +218,7 @@ def main():
                 self.highlighted_available.clear()
 
         def refresh_notebook_list(self):
-            functions.refresh_notebook_list(
-                self.notebooks_path,
-                self.available_cards_layout,
-                self.available_notebook_cards,
-                self.highlighted_available,
-                self._create_card_in_list,
-            )
+            functions.refresh_notebook_list(self)
 
         def log_message_to_cmd(self, message, is_block=False):
             if is_block:

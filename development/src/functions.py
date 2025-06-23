@@ -71,37 +71,62 @@ def handle_card_click(path, available_notebook_cards, highlighted_available):
             pass
 
 
-def refresh_notebook_list(notebooks_path, available_cards_layout, available_notebook_cards, highlighted_available, create_card_callback):
-    if available_cards_layout is None:
-        return
-    try:
-        while available_cards_layout.count() > 0:
-            item = available_cards_layout.takeAt(0)
-            if item and item.widget():
-                item.widget().deleteLater()
-    except RuntimeError:
-        return
-    available_notebook_cards.clear()
-    highlighted_available.clear()
+def refresh_notebook_list(runner_instance):
+    """
+    Làm mới danh sách notebook một cách thông minh.
+    - Thêm các notebook mới vào danh sách chờ.
+    - Xóa các notebook không còn tồn tại khỏi giao diện.
+    - Không ảnh hưởng đến các notebook đã có trong sections.
+    - Việc cập nhật code của notebook/module được xử lý ngầm khi chạy lại.
+    """
+    notebooks_path = runner_instance.notebooks_path
+    log_message("Bắt đầu làm mới danh sách notebooks...")
+
+    # 1. Lấy tất cả các notebook hiện đang được biết đến bởi ứng dụng (cả trong danh sách chờ và trong các section)
+    known_paths = set(runner_instance.available_notebook_cards.keys())
+    for section in runner_instance.sections.values():
+        known_paths.update(section.notebook_cards.keys())
+
+    # 2. Lấy tất cả các notebook .ipynb hiện có trên đĩa
     try:
         if not os.path.exists(notebooks_path):
-            raise FileNotFoundError(f"Thư mục không tồn tại: {notebooks_path}")
-        notebook_files = sorted([f for f in os.listdir(notebooks_path) if f.endswith(".ipynb")])
-        if not notebook_files:
-            from PyQt6.QtWidgets import QLabel
-
-            available_cards_layout.addWidget(QLabel("Không tìm thấy notebook."))
-        else:
-            for filename in notebook_files:
-                path = os.path.join(notebooks_path, filename)
-                try:
-                    create_card_callback(path, available_cards_layout, available_notebook_cards)
-                except RuntimeError:
-                    return
+            log_message(f"Lỗi làm mới: Không tìm thấy thư mục: {notebooks_path}")
+            return
+        disk_paths = {os.path.join(notebooks_path, f) for f in os.listdir(notebooks_path) if f.endswith(".ipynb")}
     except Exception as e:
-        from PyQt6.QtWidgets import QLabel
+        log_message(f"Lỗi làm mới: Không thể đọc thư mục {notebooks_path}: {e}")
+        return
 
-        available_cards_layout.addWidget(QLabel(f"Lỗi: {e}"))
+    # 3. Tìm các notebook mới và các notebook đã bị xóa
+    new_paths = disk_paths - known_paths
+    deleted_paths = known_paths - disk_paths
+
+    # 4. Thêm các notebook mới vào danh sách chờ
+    if new_paths:
+        sorted_new_paths = sorted(list(new_paths), key=lambda p: os.path.basename(p))
+        for path in sorted_new_paths:
+            runner_instance._create_card_in_list(path, runner_instance.available_cards_layout, runner_instance.available_notebook_cards)
+        log_message(f"Đã thêm {len(new_paths)} notebook mới vào danh sách.")
+
+    # 5. Xóa các notebook không còn tồn tại khỏi giao diện
+    if deleted_paths:
+        for path in deleted_paths:
+            # Kiểm tra và xóa khỏi danh sách chờ
+            if path in runner_instance.available_notebook_cards:
+                card = runner_instance.available_notebook_cards.pop(path)
+                if card:
+                    card.deleteLater()
+                if path in runner_instance.highlighted_available:
+                    runner_instance.highlighted_available.remove(path)
+            # Kiểm tra và xóa khỏi các section
+            else:
+                for section in runner_instance.sections.values():
+                    if path in section.notebook_cards:
+                        section.remove_notebook_card(path)
+                        break  # Giả sử notebook chỉ ở một nơi
+        log_message(f"Đã xóa {len(deleted_paths)} notebook không còn tồn tại.")
+
+    log_message("Làm mới hoàn tất. Code và module mới nhất sẽ được sử dụng trong lần chạy tiếp theo.")
 
 
 def log_message(message):
