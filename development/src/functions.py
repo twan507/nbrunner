@@ -1,3 +1,4 @@
+# development/src/functions.py
 """
 Module chứa các hàm xử lý chức năng cho ứng dụng NotebookRunner
 """
@@ -170,11 +171,6 @@ if os.path.exists(modules_path) and modules_path not in sys.path:
             injected_cell = nbformat.v4.new_code_cell(code_to_inject)
             nb.cells.insert(0, injected_cell)
 
-            # *** SỬA ĐỔI CHÍNH ***
-            # Bằng cách không chỉ định 'kernel_name', nbconvert sẽ sử dụng
-            # môi trường Python hiện tại để chạy notebook.
-            # Trong một ứng dụng đã được đóng gói, đây chính là môi trường
-            # Python mà PyInstaller đã nhúng vào.
             ep = ExecutePreprocessor(timeout=3600)
             ep.preprocess(nb, {"metadata": {"path": notebook_dir}})
 
@@ -196,7 +192,6 @@ if os.path.exists(modules_path) and modules_path not in sys.path:
     if execution_mode == "continuous":
         iteration = 1
         while not stop_event.is_set():
-            # MODIFIED: Gửi tín hiệu reset timer
             log_queue.put(("RESET_TIMER", None))
             log_queue.put(("ITERATION_START", {"iteration": iteration, "total": None}))
             start_time = time.time()
@@ -204,12 +199,10 @@ if os.path.exists(modules_path) and modules_path not in sys.path:
             duration = time.time() - start_time
             log_queue.put(("ITERATION_END", {"iteration": iteration, "success": success, "duration": duration}))
 
-            if not success:
-                break
             if stop_event.is_set():
                 break
 
-            if execution_delay > 0:
+            if execution_delay > 0 and not stop_event.is_set():
                 log_queue.put(("SECTION_LOG", f"Nghỉ {execution_delay}s..."))
                 time.sleep(execution_delay)
             iteration += 1
@@ -219,16 +212,12 @@ if os.path.exists(modules_path) and modules_path not in sys.path:
                 log_queue.put(("SECTION_LOG", "Đã hủy các lần chạy còn lại."))
                 break
 
-            # MODIFIED: Gửi tín hiệu reset timer
             log_queue.put(("RESET_TIMER", None))
             log_queue.put(("ITERATION_START", {"iteration": i + 1, "total": execution_count}))
             start_time = time.time()
             success, final_nb = run_single_notebook()
             duration = time.time() - start_time
             log_queue.put(("ITERATION_END", {"iteration": i + 1, "success": success, "duration": duration}))
-
-            if not success:
-                break
 
     log_queue.put(("EXECUTION_FINISHED", True))
 
