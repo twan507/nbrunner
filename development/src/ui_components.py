@@ -635,11 +635,11 @@ class SectionWidget(QWidget):
         controls_layout.setSpacing(8)
 
         row1_layout = QHBoxLayout()
-        self.run_all_btn = QPushButton("Chạy đồng thời")
+        self.run_all_btn = QPushButton("Chạy Đồng Thời")
         self.run_all_btn.setObjectName("SectionRunButton")
         self.run_all_btn.clicked.connect(self.run_all_simultaneously)
         row1_layout.addWidget(self.run_all_btn)
-        self.run_sequential_btn = QPushButton("Chạy Lần lượt")
+        self.run_sequential_btn = QPushButton("Chạy Lần Lượt")
         self.run_sequential_btn.setObjectName("SectionRunButton")
         self.run_sequential_btn.clicked.connect(self.run_all_sequential_wrapper)
         row1_layout.addWidget(self.run_sequential_btn)
