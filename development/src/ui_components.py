@@ -227,7 +227,7 @@ class SectionNotebookCard(QFrame):
 
         mode_layout = QHBoxLayout()
         self.mode_combo = QComboBox()
-        self.mode_combo.addItems(["Chạy liên tục", "Chạy hữu hạn"])
+        self.mode_combo.addItems(["Lặp lại vô hạn", "Lặp lại hữu hạn"])
         self.mode_combo.currentTextChanged.connect(self.on_mode_changed)
         mode_layout.addWidget(self.mode_combo, 1)
 
@@ -305,7 +305,7 @@ class SectionNotebookCard(QFrame):
         layout.addStretch()
 
     def on_mode_changed(self, text):
-        is_count_mode = text == "Chạy hữu hạn"
+        is_count_mode = text == "Lặp lại hữu hạn"
         self.execution_mode = "count" if is_count_mode else "continuous"
         self.count_label.setVisible(is_count_mode)
         self.count_spin.setVisible(is_count_mode)
@@ -324,7 +324,7 @@ class SectionNotebookCard(QFrame):
         self.consecutive_error_count = 0
 
         if self.execution_mode == "continuous":
-            log_text = "Bắt đầu: Liên tục."
+            log_text = "Bắt đầu: Vô hạn."
         else:
             log_text = f"Bắt đầu: {self.execution_count} lần."
         self.log_message_to_section(log_text)
@@ -768,8 +768,8 @@ class SectionWidget(QWidget):
         self.run_notebook(card)
         if self.parent_runner:
             nb_name = os.path.basename(card.path)
-            mode_text = "hữu hạn" if card.execution_mode == "count" else "Liên tục"
-            count_text = f" (Số lần: {card.execution_count})" if mode_text == "Hữu hạn" else ""
+            mode_text = "Lặp lại hữu hạn" if card.execution_mode == "count" else "Lặp lại vô hạn"
+            count_text = f" (Số lần: {card.execution_count})" if mode_text == "Lặp lại hữu hạn" else ""
             self.parent_runner.log_message_to_cmd(
                 f"Bắt đầu thực thi '{nb_name}' tại section '{self.section_name}' ở chế độ '{mode_text}'{count_text}."
             )
