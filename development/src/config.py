@@ -18,8 +18,8 @@ def get_root_dir():
 
 ROOT_DIR = get_root_dir()
 DEBUG = False
-APP_NAME = "Notebook Runner"
-EXE_FILE_NAME = "nbrunner.exe"
+APP_NAME = "Data Updater"
+EXE_FILE_NAME = "DataUpdater.exe"
 ICON_PATH = os.path.join(ROOT_DIR, "development", "logo.ico")
 
 if getattr(sys, "frozen", False):
@@ -34,11 +34,11 @@ APP_BUILD_DIR = os.path.join(ROOT_DIR, "app")
 # ===== CÀI ĐẶT KÍCH THƯỚC UI =====
 WINDOW_MIN_HEIGHT = 600
 
-NOTEBOOK_LIST_INITIAL_WIDTH = 250
-NOTEBOOK_LIST_MIN_WIDTH = 250
+NOTEBOOK_LIST_INITIAL_WIDTH = 300
+NOTEBOOK_LIST_MIN_WIDTH = 300
 
-SECTION_MIN_WIDTH = 300
-SECTION_DISPLAY_WIDTH = 300
+SECTION_MIN_WIDTH = 400
+SECTION_DISPLAY_WIDTH = 400
 
 SPLITTER_INITIAL_SIZES = [NOTEBOOK_LIST_INITIAL_WIDTH]
 

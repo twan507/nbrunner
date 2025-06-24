@@ -28,7 +28,7 @@ echo Don dep cac thu muc cu...
 if exist "build" rmdir /s /q "build"
 if exist "dist" rmdir /s /q "dist"
 
-REM Chi xoa file .exe va thu muc _internal cu trong app (giu nguyen data, module, notebook, output)
+REM Chi xoa file .exe va thu muc _internal cu trong app
 if exist "%APP_BUILD_DIR%\%EXE_FILE_NAME%" del /f /q "%APP_BUILD_DIR%\%EXE_FILE_NAME%"
 if exist "%APP_BUILD_DIR%\_internal" rmdir /s /q "%APP_BUILD_DIR%\_internal"
 
@@ -65,26 +65,6 @@ if exist "dist\%APP_NAME%\_internal" (
     echo Loi: Khong tim thay thu muc '_internal' trong 'dist\%APP_NAME%'.
 	goto :deactivate_and_end
 )
-
-REM Sao chep cac thu muc tu resources neu chua ton tai trong app
-echo Kiem tra va sao chep cac thu muc can thiet...
-if not exist "%APP_BUILD_DIR%\data" (
-    xcopy /E /I /Y /Q "resources\data" "%APP_BUILD_DIR%\data\"
-    echo Da sao chep thu muc 'data'.
-)
-if not exist "%APP_BUILD_DIR%\module" (
-    xcopy /E /I /Y /Q "resources\module" "%APP_BUILD_DIR%\module\"
-    echo Da sao chep thu muc 'module'.
-)
-if not exist "%APP_BUILD_DIR%\notebook" (
-    xcopy /E /I /Y /Q "resources\notebook" "%APP_BUILD_DIR%\notebook\"
-    echo Da sao chep thu muc 'notebook'.
-)
-if not exist "%APP_BUILD_DIR%\output" (
-    mkdir "%APP_BUILD_DIR%\output" >nul 2>&1
-    echo Da tao thu muc 'output'.
-)
-
 
 REM Don dep cac file va thu muc tam
 echo Don dep...
