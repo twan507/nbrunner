@@ -18,8 +18,8 @@ def get_root_dir():
 
 ROOT_DIR = get_root_dir()
 DEBUG = False
-APP_NAME = "Data Updater"
-EXE_FILE_NAME = "DataUpdater.exe"
+APP_NAME = "Notebook Runner"
+EXE_FILE_NAME = "nbrunner.exe"
 ICON_PATH = os.path.join(ROOT_DIR, "development", "logo.ico")
 
 if getattr(sys, "frozen", False):

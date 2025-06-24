@@ -118,13 +118,15 @@ if conda_dll_path:
     # Danh sách các DLL thường gây lỗi trong môi trường Conda
     # Dựa trên lỗi pyexpat và các lỗi tiềm ẩn khác
     important_dlls = [
-        'libcrypto-3.dll',  # Phụ thuộc của ssl, cryptography
-        'libssl-3.dll',     # Phụ thuộc của ssl, cryptography
+        'libcrypto-3-x64.dll', 
+        'libssl-3-x64.dll',  
         'liblzma.dll',      # Phụ thuộc của lzma
         'sqlite3.dll',      # Phụ thuộc của sqlite3
         'tk86t.dll',        # Phụ thuộc của tkinter
         'tcl86t.dll',       # Phụ thuộc của tkinter
-        'libexpat.dll'      # Phụ thuộc của pyexpat (gây ra lỗi của bạn)
+        'libexpat.dll',    # Phụ thuộc của pyexpat (gây ra lỗi của bạn)
+        'libbz2.dll',       # Phụ thuộc của _bz2.pyd (tên file trên Windows có thể là libbz2.dll)
+        'ffi.dll'           # Phụ thuộc của _ctypes.pyd (cực kỳ quan trọng)
     ]
     
     print("INFO: Them cac file DLL quan trong tu Conda...")

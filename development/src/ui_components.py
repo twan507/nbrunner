@@ -385,7 +385,7 @@ class SectionNotebookCard(QFrame):
         self.current_status = status
         status_map = {
             "ready": ("Sẵn sàng", "#008000"),
-            "running": ("Đang chạy", "#0056b3"),
+            "running": ("Đang chạy...", "#0056b3"),
             "success": ("Thành công", "#008000"),
             "error": ("Lỗi", "#FF0000"),
             "stopping": ("Đang dừng...", "#fd7e14"),
