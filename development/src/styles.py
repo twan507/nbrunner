@@ -1,4 +1,4 @@
-# Nội dung mới cho file: development/src/styles.py
+# development/src/styles.py
 
 
 def get_stylesheet():
@@ -42,7 +42,7 @@ def get_stylesheet():
             border-radius: 8px; 
             background-color: #ffffff; 
         }
-        #CardsContainer { background-color: #ffffff; border-radius: 6px; }        
+        #CardsContainer, #ScheduleListContainer { background-color: #ffffff; border-radius: 6px; }        
         #Console, #SectionConsole {
             background-color: #1e1e1e;
             color: #d4d4d4;
@@ -101,6 +101,22 @@ def get_stylesheet():
             selection-background-color: #007bff; color: black;
         }
 
+        /* --- MODIFIED: Thêm style cho QSpinBox --- */
+        QSpinBox, #HourSpinBox, #MinuteSpinBox, #DelaySpinBox, #CountSpinBox {
+            background-color: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 3px 2px;
+            color: black;
+            font-family: "Segoe UI";
+            font-size: 9pt;
+        }
+        QSpinBox:disabled {
+            background-color: #e9ecef;
+            color: #6c757d;
+        }
+        /* --- END MODIFIED --- */
+
         /* === THANH CUỘN === */
         QScrollBar:vertical {
             background-color: #f1f1f1; width: 4px; border-radius: 2px; margin: 0px;
@@ -150,7 +166,7 @@ def get_stylesheet():
         QPushButton {
             font-family: "Segoe UI";
             font-size: 10pt;
-            font-weight: bold; /* MODIFIED: Set all button text to bold */
+            font-weight: bold;
             color: #ffffff;
             border: none;
             padding: 6px 10px;

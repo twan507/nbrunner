@@ -18,7 +18,6 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QSpinBox,
     QTextEdit,
-    QTimeEdit,
     QSizePolicy,
     QMessageBox,
     QApplication,
@@ -202,7 +201,7 @@ class SectionNotebookCard(QFrame):
             None,
         )
         self.consecutive_error_count = 0
-        self.MAX_CONSECUTIVE_ERRORS = 10
+        self.MAX_CONSECUTIVE_ERRORS = 99
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setObjectName("SectionCard")
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
@@ -233,9 +232,7 @@ class SectionNotebookCard(QFrame):
 
         self.delay_label = QLabel("Nghỉ (s):")
         self.delay_spin = QSpinBox()
-        self.delay_spin.setStyleSheet(
-            "QSpinBox{background-color:#f0f0f0;border:1px solid #ccc;border-radius:4px;padding:3px 0px;color:black;}"
-        )
+        self.delay_spin.setObjectName("DelaySpinBox")
         self.delay_spin.setMinimum(0)
         self.delay_spin.setMaximum(999)
         self.delay_spin.setValue(0)
@@ -248,9 +245,7 @@ class SectionNotebookCard(QFrame):
 
         self.count_label = QLabel("Số lần:")
         self.count_spin = QSpinBox()
-        self.count_spin.setStyleSheet(
-            "QSpinBox{background-color:#f0f0f0;border:1px solid #ccc;border-radius:4px;padding:3px 0px;color:black;}"
-        )
+        self.count_spin.setObjectName("CountSpinBox")
         self.count_spin.setMinimum(1)
         self.count_spin.setMaximum(99)
         self.count_spin.setValue(1)
@@ -341,7 +336,6 @@ class SectionNotebookCard(QFrame):
         if self.current_status == "running":
             self.set_status("stopping")
             self.stop_btn.setEnabled(False)
-            # Buộc giao diện xử lý sự kiện vô hiệu hóa nút ngay lập tức
             QApplication.processEvents()
             self.stop_requested.emit(self.path)
 
@@ -598,17 +592,42 @@ class SectionWidget(QWidget):
         self.action_combo.addItems(["Chạy Đồng Thời", "Chạy Lần Lượt", "Dừng Tất Cả"])
         self.action_combo.setFont(QFont("Segoe UI", 9))
         add_schedule_layout.addWidget(self.action_combo, 1)
-        add_schedule_layout.addSpacing(5)
-        self.schedule_time_edit = QTimeEdit()
-        self.schedule_time_edit.setDisplayFormat("HH:mm")
-        self.schedule_time_edit.setTime(QTime.currentTime().addSecs(60))
-        self.schedule_time_edit.setFont(QFont("Segoe UI", 9))
-        self.schedule_time_edit.setButtonSymbols(QTimeEdit.ButtonSymbols.NoButtons)
-        self.schedule_time_edit.setFixedWidth(65)
-        self.schedule_time_edit.setStyleSheet(
-            "QTimeEdit{background-color:#f0f0f0;border:1px solid #ccc;border-radius:4px;padding:3px 5px;color:black;}"
-        )
-        add_schedule_layout.addWidget(self.schedule_time_edit)
+        add_schedule_layout.addSpacing(10)
+
+        # --- MODIFIED: Tách giờ và phút ---
+        time_layout = QHBoxLayout()
+        time_layout.setSpacing(2)
+
+        self.schedule_hour_spin = QSpinBox()
+        self.schedule_hour_spin.setRange(0, 23)
+        self.schedule_hour_spin.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
+        self.schedule_hour_spin.setFixedWidth(40)
+        self.schedule_hour_spin.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.schedule_hour_spin.setObjectName("HourSpinBox")
+
+        self.schedule_minute_spin = QSpinBox()
+        self.schedule_minute_spin.setRange(0, 59)
+        self.schedule_minute_spin.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
+        self.schedule_minute_spin.setFixedWidth(40)
+        self.schedule_minute_spin.setSingleStep(1)
+        self.schedule_minute_spin.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.schedule_minute_spin.setObjectName("MinuteSpinBox")
+
+        current_time = QTime.currentTime()
+        self.schedule_hour_spin.setValue(current_time.hour())
+        self.schedule_minute_spin.setValue(current_time.minute())
+
+        time_layout.addWidget(self.schedule_hour_spin)
+        colon_label = QLabel(":")
+        colon_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        colon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        time_layout.addWidget(colon_label)
+        
+        time_layout.addWidget(self.schedule_minute_spin)
+
+        add_schedule_layout.addLayout(time_layout)
+        # --- END MODIFIED ---
+
         self.add_schedule_btn = QPushButton("Thêm")
         self.add_schedule_btn.setObjectName("SetScheduleButton")
         self.add_schedule_btn.clicked.connect(self.add_schedule)
@@ -684,7 +703,13 @@ class SectionWidget(QWidget):
         self.schedule_counter += 1
         schedule_id = self.schedule_counter
         action_text = self.action_combo.currentText()
-        schedule_time = self.schedule_time_edit.time()
+
+        # --- MODIFIED: Lấy giờ và phút từ SpinBox ---
+        hour = self.schedule_hour_spin.value()
+        minute = self.schedule_minute_spin.value()
+        schedule_time = QTime(hour, minute)
+        # --- END MODIFIED ---
+
         action_map = {
             "Chạy Đồng Thời": "run_all_simultaneously",
             "Chạy Lần Lượt": "run_all_sequential_wrapper",
@@ -709,17 +734,23 @@ class SectionWidget(QWidget):
                 widget = item.widget()
                 if widget:
                     widget.deleteLater()
+
         if not self.schedules:
             placeholder = QLabel("Chưa có lịch hẹn nào.")
             placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
             placeholder.setStyleSheet("color:#888;")
             self.schedule_list_layout.addWidget(placeholder)
             return
+
+        # --- MODIFIED: Sắp xếp lịch hẹn theo thời gian ---
+        self.schedules.sort(key=lambda s: s["time"])
+        # --- END MODIFIED ---
+
         for schedule in self.schedules:
             item_frame = QFrame()
             item_layout = QHBoxLayout(item_frame)
             item_layout.setContentsMargins(8, 2, 8, 2)
-            label = QLabel(f"<b>{schedule['action_text']}</b> {schedule['time'].toString('HH:mm')}")
+            label = QLabel(f"<b>{schedule['action_text']}</b> lúc <b>{schedule['time'].toString('HH:mm')}</b>")
             item_layout.addWidget(label)
             item_layout.addStretch()
             remove_label = ClickableLink("Xóa")
