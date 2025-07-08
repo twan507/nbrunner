@@ -181,19 +181,35 @@ def _execute_notebook_process(
     notebook_dir = os.path.dirname(notebook_path)
 
     code_to_inject = f"""
-import sys
-import os
-modules_path = {repr(modules_path)}
-import_path = {repr(import_path)}
+        import sys
+        import os
 
-if os.path.exists(modules_path) and modules_path not in sys.path:
-    sys.path.insert(0, modules_path)
-    print(f"NBRunner: Đã thêm '{{modules_path}}' vào sys.path.")
+        # Khối mã này cực kỳ quan trọng để file .exe hoạt động.
+        # Nó đảm bảo tiến trình kernel có thể tìm thấy tất cả các thư viện đã được đóng gói (như pandas).
+        if getattr(sys, 'frozen', False):
+            # Trong ứng dụng đã build, thư mục gốc là thư mục chứa file .exe
+            # Tất cả thư viện được PyInstaller đóng gói vào thư mục '_internal'.
+            root_dir = os.path.dirname(sys.executable)
+            internal_libs_path = os.path.join(root_dir, '_internal')
+            
+            # Thêm đường dẫn thư viện đã đóng gói vào sys.path
+            if os.path.exists(internal_libs_path) and internal_libs_path not in sys.path:
+                sys.path.insert(0, internal_libs_path)
+                print(f"NBRunner (Frozen): Added bundled libs path: {{internal_libs_path}}")
 
-if os.path.exists(import_path) and import_path not in sys.path:
-    sys.path.insert(0, import_path)
-    print(f"NBRunner: Đã thêm '{{import_path}}' vào sys.path.")
-"""
+        # Khối mã này đảm bảo các module tùy chỉnh của người dùng được tìm thấy.
+        # Nó nhận các đường dẫn tuyệt đối từ ứng dụng chính.
+        modules_path = {repr(modules_path)}
+        import_path = {repr(import_path)}
+
+        # Thêm thư mục 'module' vào sys.path
+        if os.path.exists(modules_path) and modules_path not in sys.path:
+            sys.path.insert(0, modules_path)
+
+        # Thêm thư mục 'import' vào sys.path
+        if os.path.exists(import_path) and import_path not in sys.path:
+            sys.path.insert(0, import_path)
+        """
 
     def run_single_notebook():
         nb = None

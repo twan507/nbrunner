@@ -1,8 +1,8 @@
-# Build tools
+# === Build tools ===
 setuptools==69.5.1
 wheel==0.43.0
 
-# Notebook execution - Core functionality
+# === Notebook execution - Core functionality ===
 jupyter-client==7.4.9
 nbformat==5.10.0
 nbconvert==7.16.4
@@ -11,25 +11,32 @@ jupyter-core==5.7.2
 traitlets==5.14.3
 ipywidgets==8.1.5
 
-# Data handling - Thư viện cơ bản cho notebook
-pandas==2.2.2
-numpy==1.26.4
-
-# Excel support (nếu notebook cần xử lý Excel)
-openpyxl==3.1.2         # Read/write Excel 2010 xlsx/xlsm files
-
-# Configuration files
-pyyaml==6.0.1           # YAML file support
-python-dotenv==1.0.1    # .env file support
-
-# Date and time utilities
-python-dateutil==2.9.0  # Enhanced date/time parsing
-
-# GUI development
-PyQt6==6.7.0 
+# === GUI development ===
+PyQt6==6.7.0
 PyQt6-sip==13.6.0
 
-# Packaging
+# === Packaging ===
 pyinstaller==6.7.0
 pywin32==306
 cryptography==45.0.5
+
+# === Data Analysis ===
+numpy==1.26.4
+pandas==2.2.2
+
+# === Database ===
+pymongo==4.11.0
+sqlalchemy==2.0.34
+pyodbc==5.1.0
+pymysql==1.1.1
+
+# === Utilities ===
+openpyxl==3.1.2
+python-dateutil==2.9.0
+python-dotenv==1.0.1
+requests==2.32.3
+
+# # === FiinQuantx ===
+# fiinquantx
+# --extra-index-url https://fiinquant.github.io/fiinquantx/simple
+# # pip install --upgrade --extra-index-url https://fiinquant.github.io/fiinquantx/simple fiinquantx
