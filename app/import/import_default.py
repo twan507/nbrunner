@@ -14,13 +14,11 @@ from typing import cast
 # === Phân tích Dữ liệu (Data Analysis) ===
 import pandas as pd
 import numpy as np
-import pandas_ta as ta
 
 # === Tiện ích khác (Utilities) ===
 import openpyxl
 import dateutil
 import os
-import requests
 import zipfile
 import io
 

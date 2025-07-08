@@ -869,6 +869,7 @@ class SectionWidget(QWidget):
                 card.execution_count,
                 card.execution_delay,
                 self.parent_runner.modules_path,
+                self.parent_runner.import_path,
             )
 
     def run_all_simultaneously(self):

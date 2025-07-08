@@ -175,16 +175,24 @@ def get_notebook_description(path):
         return "Không thể đọc mô tả."
 
 
-def _execute_notebook_process(notebook_path, log_queue, stop_event, execution_mode, execution_count, execution_delay, modules_path):
+def _execute_notebook_process(
+    notebook_path, log_queue, stop_event, execution_mode, execution_count, execution_delay, modules_path, import_path
+):
     notebook_dir = os.path.dirname(notebook_path)
 
     code_to_inject = f"""
 import sys
 import os
 modules_path = {repr(modules_path)}
+import_path = {repr(import_path)}
+
 if os.path.exists(modules_path) and modules_path not in sys.path:
     sys.path.insert(0, modules_path)
     print(f"NBRunner: Đã thêm '{{modules_path}}' vào sys.path.")
+
+if os.path.exists(import_path) and import_path not in sys.path:
+    sys.path.insert(0, import_path)
+    print(f"NBRunner: Đã thêm '{{import_path}}' vào sys.path.")
 """
 
     def run_single_notebook():
@@ -288,14 +296,14 @@ if os.path.exists(modules_path) and modules_path not in sys.path:
 
 
 def run_notebook_with_individual_logging(
-    notebook_path, running_processes, card, execution_mode, execution_count, execution_delay, modules_path
+    notebook_path, running_processes, card, execution_mode, execution_count, execution_delay, modules_path, import_path
 ):
     if notebook_path in running_processes:
         return
 
     log_queue = Queue()
     stop_event = Event()
-    process_args = (notebook_path, log_queue, stop_event, execution_mode, execution_count, execution_delay, modules_path)
+    process_args = (notebook_path, log_queue, stop_event, execution_mode, execution_count, execution_delay, modules_path, import_path)
     process = Process(target=_execute_notebook_process, args=process_args, daemon=True)
     running_processes[notebook_path] = {"process": process, "stop_event": stop_event, "queue": log_queue, "card": card}
 

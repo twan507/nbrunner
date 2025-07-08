@@ -78,6 +78,7 @@ def main():
             self.setWindowTitle(config.APP_NAME)
             self.notebooks_path = config.NOTEBOOKS_DIR
             self.modules_path = config.MODULES_DIR
+            self.import_path = config.IMPORT_DIR
             self.available_notebook_cards = {}
             self.highlighted_available = []
             self.sections = {}
