@@ -9,19 +9,14 @@ nbconvert==7.16.4
 ipykernel==6.29.4
 jupyter-core==5.7.2
 traitlets==5.14.3
+ipywidgets==8.1.5
 
 # Data handling - Thư viện cơ bản cho notebook
 pandas==2.2.2
 numpy==1.26.4
 
-# File and directory management
-send2trash==1.8.3       # Send files to trash instead of permanent deletion
-
 # Excel support (nếu notebook cần xử lý Excel)
 openpyxl==3.1.2         # Read/write Excel 2010 xlsx/xlsm files
-
-# CSV and data formats
-tabulate==0.9.0         # Pretty-print tabular data
 
 # Configuration files
 pyyaml==6.0.1           # YAML file support
@@ -36,4 +31,5 @@ PyQt6-sip==13.6.0
 
 # Packaging
 pyinstaller==6.7.0
-pywin32==306  
+pywin32==306
+cryptography==45.0.5

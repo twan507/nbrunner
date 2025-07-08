@@ -64,7 +64,7 @@ package_to_module_map = {
 # hoac la goi dung cho moi truong build, khong phai runtime.
 ignore_list = {
     'setuptools', 'wheel', 'pywin32', 'PyQt6-sip', 'send2trash', 
-    'pyyaml', 'tabulate', 'traitlets', 'pyinstaller', 
+    'pyyaml', 'traitlets', 'pyinstaller', 
     'nbformat', 'debugpy' # nbformat va debugpy da duoc xu ly boi collect_all
 }
 

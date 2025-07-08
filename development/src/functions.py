@@ -176,7 +176,6 @@ def get_notebook_description(path):
 
 
 def _execute_notebook_process(notebook_path, log_queue, stop_event, execution_mode, execution_count, execution_delay, modules_path):
-    # notebook_name = os.path.basename(notebook_path)
     notebook_dir = os.path.dirname(notebook_path)
 
     code_to_inject = f"""
@@ -214,15 +213,32 @@ if os.path.exists(modules_path) and modules_path not in sys.path:
             log_queue.put(("EXECUTION_ERROR", {"details": error_details}))
             return False, nb
 
+    # Chạy lặp vô hạn
     if execution_mode == "continuous":
         iteration = 1
+        consecutive_errors = 0
         while not stop_event.is_set():
             log_queue.put(("RESET_TIMER", None))
             log_queue.put(("ITERATION_START", {"iteration": iteration, "total": None}))
             start_time = time.time()
             success, final_nb = run_single_notebook()
             duration = time.time() - start_time
-            log_queue.put(("ITERATION_END", {"iteration": iteration, "success": success, "duration": duration}))
+
+            if success:
+                consecutive_errors = 0
+            else:
+                consecutive_errors += 1
+
+            log_queue.put(
+                (
+                    "ITERATION_END",
+                    {"iteration": iteration, "success": success, "duration": duration, "consecutive_errors": consecutive_errors},
+                )
+            )
+
+            if not success and consecutive_errors >= config.MAX_CONSECUTIVE_ERRORS:
+                log_queue.put(("SECTION_LOG", f"Dừng do lỗi {consecutive_errors} lần liên tiếp."))
+                break
 
             if stop_event.is_set():
                 break
@@ -231,18 +247,42 @@ if os.path.exists(modules_path) and modules_path not in sys.path:
                 log_queue.put(("SECTION_LOG", f"Nghỉ {execution_delay}s..."))
                 time.sleep(execution_delay)
             iteration += 1
+
+    # Chạy lặp hữu hạn (chỉ tính lần thành công)
     else:
-        for i in range(execution_count):
+        successful_runs = 0
+        total_runs = 0
+        consecutive_errors = 0
+
+        while successful_runs < execution_count:
             if stop_event.is_set():
                 log_queue.put(("SECTION_LOG", "Đã hủy các lần chạy còn lại."))
                 break
 
+            total_runs += 1
             log_queue.put(("RESET_TIMER", None))
-            log_queue.put(("ITERATION_START", {"iteration": i + 1, "total": execution_count}))
+            log_queue.put(("ITERATION_START", {"iteration": total_runs, "total": execution_count, "success_count": successful_runs}))
+
             start_time = time.time()
             success, final_nb = run_single_notebook()
             duration = time.time() - start_time
-            log_queue.put(("ITERATION_END", {"iteration": i + 1, "success": success, "duration": duration}))
+
+            if success:
+                successful_runs += 1
+                consecutive_errors = 0
+            else:
+                consecutive_errors += 1
+
+            log_queue.put(
+                (
+                    "ITERATION_END",
+                    {"iteration": total_runs, "success": success, "duration": duration, "consecutive_errors": consecutive_errors},
+                )
+            )
+
+            if not success and consecutive_errors >= config.MAX_CONSECUTIVE_ERRORS:
+                log_queue.put(("SECTION_LOG", f"Dừng do lỗi {consecutive_errors} lần liên tiếp."))
+                break
 
     log_queue.put(("EXECUTION_FINISHED", True))
 
