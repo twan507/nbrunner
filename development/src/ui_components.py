@@ -473,21 +473,22 @@ class SectionNotebookCard(QFrame):
             cursor = self.iteration_logs.get(iteration)
             duration_str = self._format_duration(content["duration"])
 
-            # if content["success"]:
-            #     self.consecutive_error_count = 0
-            #     if cursor:
-            #         cursor.movePosition(QTextCursor.MoveOperation.EndOfLine)
-            #         cursor.insertText(f" {duration_str}")
-            # else:
-            self.consecutive_error_count += 1
-            if cursor:
-                if self.execution_mode == "continuous":
-                    error_message = f" {duration_str} [LỖI {self.consecutive_error_count}/{config.MAX_CONSECUTIVE_ERRORS_CONTINOUS}]"
-                else:
-                    error_message = f" {duration_str} [LỖI {self.consecutive_error_count}/{config.MAX_CONSECUTIVE_ERRORS_FINITE}]"
+            if content["success"]:
+                self.consecutive_error_count = 0
+                if cursor:
+                    cursor.movePosition(QTextCursor.MoveOperation.EndOfLine)
+                    cursor.insertText(f" {duration_str}")
+            else:
+                self.consecutive_error_count += 1
+                if cursor:
+                    if self.execution_mode == "continuous":
+                        error_message = f" {duration_str} [LỖI {self.consecutive_error_count}/{config.MAX_CONSECUTIVE_ERRORS_CONTINOUS}]"
+                    else:
+                        error_message = f" {duration_str} [LỖI {self.consecutive_error_count}/{config.MAX_CONSECUTIVE_ERRORS_FINITE}]"
 
-                cursor.movePosition(QTextCursor.MoveOperation.EndOfLine)
-                cursor.insertText(error_message)
+                    cursor.movePosition(QTextCursor.MoveOperation.EndOfLine)
+                    cursor.insertText(error_message)
+
         elif msg_type == "EXECUTION_FINISHED":
             self.on_execution_finished(False)
 
