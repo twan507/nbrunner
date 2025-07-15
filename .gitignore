@@ -182,6 +182,7 @@ development/venv/
 # Built Application (file exe và thư mục build)
 app/_internal
 app/*.exe
+*.rar
 
 # PyInstaller temporary files
 build/
@@ -232,3 +233,4 @@ config_local.py
 # Cache directories
 .cache/
 cache/
+
