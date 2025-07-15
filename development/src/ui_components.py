@@ -796,18 +796,15 @@ class SectionWidget(QWidget):
 
         # Chuyển đổi msg_type sang 'Output' hoặc 'ERROR'
         log_type = "ERROR" if msg_type == "EXECUTION_ERROR" else "Output"
-        
+
         # Lấy nội dung thực sự từ dict (đối với lỗi)
         log_content = content.get("details", "") if isinstance(content, dict) else str(content)
 
         # Gọi hàm định dạng mới với đầy đủ thông tin
         formatted_log = functions.format_output_for_cmd(
-            log_type=log_type,
-            section_name=self.section_name,
-            nb_name=nb_name,
-            content=log_content
+            log_type=log_type, section_name=self.section_name, nb_name=nb_name, content=log_content
         )
-        
+
         # Gửi chuỗi đã định dạng tới console chính
         self.parent_runner.log_message_to_cmd(formatted_log, is_block=True)
 

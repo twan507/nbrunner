@@ -140,13 +140,13 @@ def format_output_for_cmd(log_type, section_name, nb_name, content, width=100):
     Ví dụ: [09:42:45] [Output] [Section 2] [finext04_realtime_data.ipynb]
     """
     timestamp = time.strftime("%H:%M:%S")
-    
+
     # Xác định tag là [Output] hay [ERROR]
     tag = f"[{log_type.upper()}]"
-    
+
     # Tạo dòng tiêu đề
     header = f"[{timestamp}] {tag} [{section_name}] [{nb_name}]"
-    
+
     separator = "=" * width
 
     # Ghép lại thành chuỗi hoàn chỉnh
@@ -244,14 +244,14 @@ def _execute_notebook_process(
                         if output.output_type == "stream" and output.text.strip():
                             # Thêm output vào list thay vì gửi đi ngay
                             all_prints.append(output.text)
-            
+
             # Nếu có output trong list, nối chúng lại và gửi đi một lần duy nhất
             if all_prints:
                 combined_output = "\n".join(all_prints)
                 log_queue.put(("NOTEBOOK_PRINT", combined_output))
-                
+
             return True, nb
-            
+
         except CellExecutionError as e:
             # Lấy traceback đầy đủ dưới dạng một chuỗi
             full_traceback = traceback.format_exc()
@@ -266,7 +266,7 @@ def _execute_notebook_process(
             # Chỉ gửi phần lỗi đã được rút gọn về giao diện
             log_queue.put(("EXECUTION_ERROR", {"details": short_traceback}))
             return False, nb
-            
+
         except Exception as e:
             # Rút gọn thông báo cho các lỗi chung khác để log luôn sạch sẽ
             error_details = f"Lỗi không mong muốn: {type(e).__name__}: {e}"
